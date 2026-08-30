@@ -1,7 +1,9 @@
 ﻿import Link from 'next/link';
 import { signup } from '@/app/actions/auth';
 
-export default function SignupPage() {
+export default async function SignupPage({ searchParams }: { searchParams: Promise<{ message?: string }> }) {
+  const resolvedParams = await searchParams;
+
   return (
     <div className="min-h-screen flex flex-col justify-center items-center bg-bg-main px-6 py-12">
       <div className="w-full max-w-md bg-bg-card border border-border-light rounded-2xl shadow-xl p-8">
@@ -14,6 +16,12 @@ export default function SignupPage() {
         </div>
 
         <form action={signup} className="space-y-4">
+          {resolvedParams?.message && (
+            <div className="p-3 bg-red-500/10 border border-red-500 rounded-xl text-red-500 text-sm font-bold text-center">
+              {resolvedParams.message}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-text-charcoal mb-1">Email</label>
             <input 
