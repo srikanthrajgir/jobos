@@ -5,6 +5,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ChatWidget from "@/components/ChatWidget";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "JobOS Australia | AI Career Operating System",
@@ -19,6 +20,19 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark h-full antialiased" data-theme="dark">
       <body className="min-h-full flex flex-col font-sans">
+        {/* Google Analytics */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-5LMQW7518B"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-5LMQW7518B');
+          `}
+        </Script>
         <Navbar />
         <main className="flex-grow pt-24">
           {children}
