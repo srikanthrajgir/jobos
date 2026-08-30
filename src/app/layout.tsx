@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import "@fontsource/plus-jakarta-sans";
 import "@fontsource/dm-serif-display";
 import "./globals.css";
@@ -8,7 +8,7 @@ import ChatWidget from "@/components/ChatWidget";
 import Script from "next/script";
 
 export const metadata: Metadata = {
-  title: "JobOS Australia | AI Career Operating System",
+  title: "JobOS Australia | AI Job Operating System",
   description: "Discover opportunities, research companies, create stronger applications, manage follow-ups and measure your job-search progress with JobOS.",
 };
 

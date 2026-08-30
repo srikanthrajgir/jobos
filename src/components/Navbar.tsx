@@ -49,7 +49,7 @@ const Navbar = () => {
           <nav className="hidden lg:flex items-center space-x-6 text-sm tracking-widest uppercase font-medium">
             <Link href="/why-jobos" className="text-text-muted hover:text-text-charcoal transition-colors">Why JobOS</Link>
             <Link href="/how-it-works" className="text-text-muted hover:text-text-charcoal transition-colors">How It Works</Link>
-            <Link href="/career-intelligence" className="text-text-muted hover:text-text-charcoal transition-colors">Career Intelligence</Link>
+            <Link href="/job-intelligence" className="text-text-muted hover:text-text-charcoal transition-colors">Job Intelligence</Link>
             <Link href="/faq" className="text-text-muted hover:text-text-charcoal transition-colors">FAQ</Link>
             <Link href="/login" className="text-text-muted hover:text-text-charcoal transition-colors">Sign In</Link>
             <Link href="/signup" className="px-4 py-2 bg-primary-teal text-white rounded-md font-bold hover:bg-primary-teal-dark transition-colors">Build My JobOS</Link>
@@ -80,7 +80,7 @@ const Navbar = () => {
         >
           <Link href="/why-jobos" className="text-text-muted hover:text-text-charcoal uppercase tracking-widest text-sm py-2">Why JobOS</Link>
           <Link href="/how-it-works" className="text-text-muted hover:text-text-charcoal uppercase tracking-widest text-sm py-2">How It Works</Link>
-          <Link href="/career-intelligence" className="text-text-muted hover:text-text-charcoal uppercase tracking-widest text-sm py-2">Career Intelligence</Link>
+          <Link href="/job-intelligence" className="text-text-muted hover:text-text-charcoal uppercase tracking-widest text-sm py-2">Job Intelligence</Link>
           <Link href="/faq" className="text-text-muted hover:text-text-charcoal uppercase tracking-widest text-sm py-2">FAQ</Link>
           <Link href="/login" className="text-text-muted hover:text-text-charcoal uppercase tracking-widest text-sm py-2">Sign In</Link>
           <Link href="/signup" className="text-primary-teal hover:text-primary-teal-dark uppercase tracking-widest text-sm py-2 font-bold">Build My JobOS</Link>

@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <span className="text-accent-orange">JOB</span><span className="text-text-heading">OS</span>
           </Link>
           <h1 className="text-2xl font-bold mt-6">Welcome back</h1>
-          <p className="text-text-muted mt-2">Sign in to continue your career journey.</p>
+          <p className="text-text-muted mt-2">Sign in to continue your job search journey.</p>
         </div>
 
         <form action={signInWithGoogle} className="mb-6">

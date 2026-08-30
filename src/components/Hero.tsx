@@ -16,7 +16,7 @@ export default function Hero() {
               transition={{ delay: 0.1, duration: 0.8 }}
               className="text-primary-teal font-bold uppercase tracking-widest text-sm mb-4"
             >
-              Your career, running on a better system.
+              Your job search, running on a better system.
             </motion.div>
             
             <motion.h1 
@@ -34,7 +34,7 @@ export default function Hero() {
               transition={{ delay: 0.5, duration: 0.8 }}
               className="text-lg md:text-xl font-medium text-text-muted mb-10 leading-relaxed"
             >
-              JobOS uses AI to help you discover opportunities, research companies, prepare stronger applications, follow up consistently and measure real progress - without losing control of your career.
+              JobOS uses AI to help you discover opportunities, research companies, prepare stronger applications, follow up consistently and measure real progress - without losing control of your job search.
             </motion.p>
             
             <motion.div

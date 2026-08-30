@@ -10,7 +10,7 @@ export default function AdminContentPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-text-heading">Career Intelligence CMS</h2>
+        <h2 className="text-2xl font-bold text-text-heading">Job Intelligence CMS</h2>
         <Link 
           href="/admin/content/new" 
           className="flex items-center space-x-2 bg-primary-teal text-bg-main px-4 py-2 rounded-xl font-bold hover:bg-primary-teal-dark transition-colors"

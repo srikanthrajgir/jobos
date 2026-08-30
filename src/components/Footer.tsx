@@ -1,4 +1,4 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 
 const Footer = () => {
   return (
@@ -30,10 +30,10 @@ const Footer = () => {
           <div>
             <h4 className="text-lg font-bold mb-6 text-text-heading">Resources</h4>
             <ul className="space-y-3">
-              <li><Link href="/career-intelligence" className="text-text-muted hover:text-primary-teal transition-colors">Career Intelligence</Link></li>
-              <li><Link href="/career-intelligence/graduate-careers" className="text-text-muted hover:text-primary-teal transition-colors">Graduate Careers</Link></li>
-              <li><Link href="/career-intelligence/career-strategy" className="text-text-muted hover:text-primary-teal transition-colors">Career Strategy</Link></li>
-              <li><Link href="/career-intelligence/company-watch" className="text-text-muted hover:text-primary-teal transition-colors">Company Watch</Link></li>
+              <li><Link href="/job-intelligence" className="text-text-muted hover:text-primary-teal transition-colors">Job Intelligence</Link></li>
+              <li><Link href="/job-intelligence/graduate-jobs" className="text-text-muted hover:text-primary-teal transition-colors">Graduate Jobs</Link></li>
+              <li><Link href="/job-intelligence/job-strategy" className="text-text-muted hover:text-primary-teal transition-colors">Job Strategy</Link></li>
+              <li><Link href="/job-intelligence/company-watch" className="text-text-muted hover:text-primary-teal transition-colors">Company Watch</Link></li>
               <li><Link href="/faq" className="text-text-muted hover:text-primary-teal transition-colors">FAQ</Link></li>
             </ul>
           </div>

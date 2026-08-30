@@ -1,3 +1,3 @@
-# JobOS
+﻿# JobOS
 
-AI-powered career operating system.
+AI-powered Job Operating System.

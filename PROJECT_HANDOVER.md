@@ -14,7 +14,7 @@
   - Developed the `Resume Text Extraction & Review` UI.
   - Built the `AI Application Studio` interface with "Fit Gap Analysis" and "Cover Letter Generation" mocking.
   - Implemented the AI Provider factory pattern (`utils/ai/provider.ts`) enabling simple switching between LLMs (OpenAI, Anthropic).
-  - Designed the `Admin Career Intelligence CMS` (Article dashboard and Editor).
+  - Designed the `Admin Job Intelligence CMS` (Article dashboard and Editor).
   - Developed the `Admin AI Settings` dashboard for monitoring usage, costs, limits, and emergency AI disable switches.
 
 ## Next Steps

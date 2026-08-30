@@ -11,7 +11,7 @@
 - [x] Public header, full-screen landing page and detailed footer (built to match unghost style)
 - [x] Responsive and accessible design
 - [ ] Technical SEO, sitemap, robots and metadata foundation
-- [ ] Career Intelligence hub and article template
+- [ ] Job Intelligence hub and article template
 
 ## Phase 2 — Supabase and authenticated shell
 - [x] Installed Supabase libraries
@@ -28,7 +28,7 @@
 - [x] Today dashboard and basic analytics
 
 ## Phase 4 — Content operations and AI assistance
-- [x] Admin Career Intelligence CMS (CMS table UI and 'New Article' editor)
+- [x] Admin Job Intelligence CMS (CMS table UI and 'New Article' editor)
 - [x] AI provider abstraction (`utils/ai/provider.ts`)
 - [x] Resume text extraction and review (`app/resume` + `actions/ai.ts`)
 - [x] Resume-to-job Fit Gap (`app/application-studio`)
