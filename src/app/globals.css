@@ -1,26 +1,138 @@
 @import "tailwindcss";
 
+
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+	--font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	--bg-main: #FFFFFF;
+	--bg-secondary: #F8FAFC;
+	--bg-card: #FFFFFF;
+	--bg-hover: #F1F5F9;
+	--bg-input: #FFFFFF;
+	--border-light: #E0E6ED;
+	--border-hover: #CBD5E1;
+	--primary-teal: #46D3BD;
+	--primary-teal-dark: #2BBBA5;
+	--primary-teal-light: #E8FAF6;
+	--accent-cyan: #06B6D4;
+	--accent-cyan-light: #ECFEFF;
+	--accent-orange: #F97316;
+	--accent-orange-light: #FFF7ED;
+	--accent-blue: #3B82F6;
+	--accent-blue-light: #EFF6FF;
+	--accent-amber: #F59E0B;
+	--accent-emerald: #10B981;
+	--text-charcoal: #2C3E50;
+	--text-heading: #0F172A;
+	--text-muted: #7F8C8D;
+	--text-subtle: #94A3B8;
+	--shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, .03);
+	--shadow-md: 0 4px 12px -2px rgba(0, 0, 0, .06);
+	--shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, .08);
+	--shadow-teal: 0 4px 14px 0 rgba(70, 211, 189, .3);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark, [data-theme="dark"] {
+	--bg-main: #0F172A;
+	--bg-secondary: #1E293B;
+	--bg-card: #1E293B;
+	--bg-hover: #334155;
+	--bg-input: #0F172A;
+	--border-light: #334155;
+	--border-hover: #475569;
+	--primary-teal: #14B8A6;
+	--primary-teal-dark: #0D9488;
+	--primary-teal-light: rgba(20, 184, 166, .15);
+	--accent-cyan: #06B6D4;
+	--accent-cyan-light: rgba(6, 182, 212, .15);
+	--accent-orange: #F97316;
+	--accent-orange-light: rgba(249, 115, 22, .15);
+	--accent-blue: #38BDF8;
+	--accent-blue-light: rgba(56, 189, 248, .15);
+	--text-charcoal: #F8FAFC;
+	--text-heading: #FFFFFF;
+	--text-muted: #94A3B8;
+	--text-subtle: #64748B;
+	--shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, .3);
+	--shadow-md: 0 4px 14px -2px rgba(0, 0, 0, .4);
+	--shadow-lg: 0 12px 30px -5px rgba(0, 0, 0, .5);
+	--shadow-teal: 0 4px 16px 0 rgba(20, 184, 166, .4);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-charcoal);
+    font-family: var(--font-family);
+    @apply antialiased overflow-x-hidden transition-colors duration-300;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-wide;
+    color: var(--text-heading);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999998;
+  background: var(--bg-main);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-heading);
+  pointer-events: none;
 }
+
+.clip-text {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Graceful, random-looking eye movement */
+@keyframes lookAround {
+  0%, 100% { transform: translate(0px, 0px); }
+  15% { transform: translate(-3px, -2px); }
+  35% { transform: translate(4px, -1px); }
+  55% { transform: translate(2px, 3px); }
+  75% { transform: translate(-3px, 2px); }
+}
+
+/* Double blink effect with a slight tilt */
+@keyframes grokBlink {
+  0%, 90%, 96%, 100% { transform: scaleY(1) rotate(-20deg); }
+  93%, 98% { transform: scaleY(0.1) rotate(-20deg); }
+}
+
+.animate-look-around {
+  animation: lookAround 7s infinite ease-in-out alternate;
+}
+
+.animate-grok-blink {
+  transform-origin: center;
+  animation: grokBlink 6s infinite ease-in-out;
+}
+
+@theme {
+  --color-bg-main: var(--bg-main);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-card: var(--bg-card);
+  --color-bg-hover: var(--bg-hover);
+  --color-bg-input: var(--bg-input);
+  --color-border-light: var(--border-light);
+  --color-border-hover: var(--border-hover);
+  --color-primary-teal: var(--primary-teal);
+  --color-primary-teal-dark: var(--primary-teal-dark);
+  --color-primary-teal-light: var(--primary-teal-light);
+  --color-accent-cyan: var(--accent-cyan);
+  --color-accent-orange: var(--accent-orange);
+  --color-text-charcoal: var(--text-charcoal);
+  --color-text-heading: var(--text-heading);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --font-sans: "Plus Jakarta Sans", sans-serif;
+  --font-display: "DM Serif Display", serif;
+}
+
