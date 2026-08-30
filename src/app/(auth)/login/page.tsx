@@ -1,4 +1,5 @@
 ﻿import Link from 'next/link';
+import { login } from '@/app/actions/auth';
 
 export default function LoginPage() {
   return (
@@ -12,7 +13,7 @@ export default function LoginPage() {
           <p className="text-text-muted mt-2">Sign in to continue your career journey.</p>
         </div>
 
-        <form className="space-y-4">
+        <form action={login} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-text-charcoal mb-1">Email</label>
             <input 
@@ -30,7 +31,7 @@ export default function LoginPage() {
               name="password"
               required 
               className="w-full bg-bg-input border border-border-light rounded-xl py-3 px-4 focus:outline-none focus:border-accent-orange focus:ring-1 focus:ring-accent-orange transition-all"
-              placeholder="********"
+              placeholder="••••••••"
             />
           </div>
           
@@ -41,7 +42,7 @@ export default function LoginPage() {
           </div>
 
           <button 
-            formAction="/auth/login"
+            type="submit"
             className="w-full bg-accent-orange border-2 border-accent-orange text-white py-3 rounded-xl font-bold hover:bg-[#ea580c] hover:border-[#ea580c] transition-all mt-6 shadow-md"
           >
             Sign In
