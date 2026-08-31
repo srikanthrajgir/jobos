@@ -1,5 +1,5 @@
+﻿import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -27,26 +27,26 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  const path = request.nextUrl.pathname;
+  const isAuthRoute = request.nextUrl.pathname.startsWith('/auth') || request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup'
+  const isAppRoute = request.nextUrl.pathname.startsWith('/app')
 
-  // Protect /app and /admin routes
-  if (path.startsWith('/app') || path.startsWith('/admin')) {
-    if (!user) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
-    }
+  if (!user && isAppRoute) {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Redirect logged-in users away from auth pages
-  if ((path.startsWith('/login') || path.startsWith('/signup')) && user) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/app'
-    return NextResponse.redirect(url)
+  if (user && isAuthRoute) {
+    return NextResponse.redirect(new URL('/app', request.url))
+  }
+
+  // Onboarding Protection
+  if (user && isAppRoute && !request.nextUrl.pathname.startsWith('/app/onboarding')) {
+    // Check onboarding status
+    const { data: profile } = await supabase.from('profiles').select('onboarding_status').eq('id', user.id).single();
+    if (profile && profile.onboarding_status !== 'completed') {
+      return NextResponse.redirect(new URL('/app/onboarding', request.url))
+    }
   }
 
   return supabaseResponse

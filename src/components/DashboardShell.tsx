@@ -1,27 +1,14 @@
-"use client";
+﻿"use client";
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  LayoutDashboard, 
-  Search, 
-  Building2, 
-  KanbanSquare, 
-  FileEdit, 
-  FileText, 
-  Clock, 
-  UserCheck, 
-  Target, 
-  BarChart2, 
-  Settings, 
-  LogOut,
-  Menu,
-  X,
-  Bell,
-  ChevronLeft,
-  ChevronRight
+  LayoutDashboard, Search, Building2, KanbanSquare, 
+  FileEdit, FileText, Clock, UserCheck, Target, 
+  BarChart2, Settings, LogOut, ChevronLeft, ChevronRight,
+  Menu, X, Bell
 } from 'lucide-react';
 
 const SIDEBAR_ITEMS = [
@@ -187,10 +174,22 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </header>
 
         {/* Scrollable Workspace */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
-          <div className="max-w-7xl mx-auto">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth flex flex-col">
+          <div className="max-w-7xl mx-auto w-full flex-1">
             {children}
           </div>
+          
+          <footer className="max-w-7xl mx-auto w-full mt-12 py-6 border-t border-border-light text-center text-xs text-text-muted flex justify-center space-x-4">
+            <span>© {new Date().getFullYear()} JobOS</span>
+            <span>&middot;</span>
+            <Link href="/privacy" className="hover:text-primary-teal transition-colors">Privacy</Link>
+            <span>&middot;</span>
+            <Link href="/terms" className="hover:text-primary-teal transition-colors">Terms</Link>
+            <span>&middot;</span>
+            <Link href="/disclaimer" className="hover:text-primary-teal transition-colors">Disclaimer</Link>
+            <span>&middot;</span>
+            <Link href="/help" className="hover:text-primary-teal transition-colors">Help</Link>
+          </footer>
         </main>
         
       </div>

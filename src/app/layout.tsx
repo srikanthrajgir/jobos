@@ -2,8 +2,6 @@
 import "@fontsource/plus-jakarta-sans";
 import "@fontsource/dm-serif-display";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import ChatWidget from "@/components/ChatWidget";
 import Script from "next/script";
 
@@ -33,11 +31,9 @@ export default function RootLayout({
             gtag('config', 'G-5LMQW7518B');
           `}
         </Script>
-        <Navbar />
-        <main className="flex-grow pt-24">
-          {children}
-        </main>
-        <Footer />
+        
+        {children}
+
         <ChatWidget />
       </body>
     </html>
