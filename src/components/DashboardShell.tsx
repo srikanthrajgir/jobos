@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -26,7 +26,7 @@ const SIDEBAR_ITEMS = [
   { icon: Settings, label: 'Settings', href: '/app/settings' },
 ];
 
-export default function DashboardShell({ children }: { children: React.ReactNode }) {
+export default function DashboardShell({ children, userEmail }: { children: React.ReactNode, userEmail?: string }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
@@ -178,6 +178,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           </div>
           
           <div className="flex items-center space-x-2 md:space-x-4">
+            {userEmail && (
+              <span className="hidden md:inline-block text-sm font-medium text-text-muted">
+                {userEmail}
+              </span>
+            )}
             <button className="p-2 text-text-muted hover:text-text-charcoal rounded-full hover:bg-bg-hover transition-colors">
               <Search size={20} />
             </button>
