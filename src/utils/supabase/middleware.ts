@@ -44,7 +44,8 @@ export async function updateSession(request: NextRequest) {
   if (user && isAppRoute && !request.nextUrl.pathname.startsWith('/app/onboarding')) {
     // Check onboarding status
     const { data: profile } = await supabase.from('profiles').select('onboarding_status').eq('id', user.id).single();
-    if (profile && profile.onboarding_status !== 'completed') {
+    // If profile doesn't exist yet, or isn't completed, force them to onboarding
+    if (!profile || profile.onboarding_status !== 'completed') {
       return NextResponse.redirect(new URL('/app/onboarding', request.url))
     }
   }

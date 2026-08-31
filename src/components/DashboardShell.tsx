@@ -10,6 +10,7 @@ import {
   BarChart2, Settings, LogOut, ChevronLeft, ChevronRight,
   Menu, X, Bell
 } from 'lucide-react';
+import { signOut } from '@/app/actions/auth';
 
 const SIDEBAR_ITEMS = [
   { icon: LayoutDashboard, label: 'Today', href: '/app' },
@@ -29,6 +30,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   return (
     <div className="flex h-screen bg-bg-secondary overflow-hidden font-sans">
@@ -82,7 +87,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         </div>
 
         <div className="p-4 border-t border-border-light">
-          <button className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-text-muted hover:bg-bg-hover hover:text-red-500 transition-colors ${isCollapsed ? 'justify-center' : ''}`}>
+          <button 
+            onClick={handleSignOut}
+            className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-text-muted hover:bg-bg-hover hover:text-red-500 transition-colors ${isCollapsed ? 'justify-center' : ''}`}
+          >
             <LogOut size={20} />
             {!isCollapsed && <span className="text-sm tracking-wide font-medium">Sign Out</span>}
           </button>
@@ -135,6 +143,16 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                       </Link>
                     );
                   })}
+                  <button 
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      handleSignOut();
+                    }}
+                    className="w-full flex items-center space-x-4 px-4 py-3 rounded-xl text-text-muted hover:bg-bg-hover hover:text-red-500 transition-colors mt-4 border-t border-border-light"
+                  >
+                    <LogOut size={20} />
+                    <span className="text-sm tracking-wide font-medium">Sign Out</span>
+                  </button>
                 </nav>
               </div>
             </motion.aside>
@@ -167,7 +185,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
               <Bell size={20} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent-orange rounded-full border border-bg-card"></span>
             </button>
-            <div className="w-8 h-8 rounded-full bg-primary-teal text-bg-main flex items-center justify-center font-bold text-sm shadow-sm ml-2">
+            <div className="w-8 h-8 rounded-full bg-primary-teal text-bg-main flex items-center justify-center font-bold text-sm shadow-sm ml-2 cursor-pointer">
               JS
             </div>
           </div>
