@@ -6,8 +6,7 @@ import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, Search, Building2, KanbanSquare, 
-  FileEdit, FileText, Clock, UserCheck, Target, 
-  BarChart2, Settings, LogOut, ChevronLeft, ChevronRight,
+  FileEdit, FileText, LogOut, ChevronLeft, ChevronRight,
   Menu, X, Bell
 } from 'lucide-react';
 import { signOut } from '@/app/actions/auth';
@@ -19,11 +18,6 @@ const SIDEBAR_ITEMS = [
   { icon: KanbanSquare, label: 'Pipeline', href: '/app/pipeline' },
   { icon: FileEdit, label: 'Application Studio', href: '/app/application-studio' },
   { icon: FileText, label: 'Resume', href: '/app/resume' },
-  { icon: Clock, label: 'Follow-ups', href: '/app/follow-ups' },
-  { icon: UserCheck, label: 'Interview Coach', href: '/app/interview-coach' },
-  { icon: Target, label: 'Skills', href: '/app/skills' },
-  { icon: BarChart2, label: 'Analytics', href: '/app/analytics' },
-  { icon: Settings, label: 'Settings', href: '/app/settings' },
 ];
 
 export default function DashboardShell({ children, userEmail }: { children: React.ReactNode, userEmail?: string }) {

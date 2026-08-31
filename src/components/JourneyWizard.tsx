@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, ArrowRight, ArrowLeft, Save, Sparkles, Loader2 } from 'lucide-react';
 import { generateJobJourney, saveJobJourney } from '@/app/actions/journeys';
+import type { JourneyPlan } from '@/lib/validation';
 
-export default function JourneyWizard({ onClose, onComplete }: { onClose: () => void, onComplete: (journey: any) => void }) {
+export default function JourneyWizard({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -17,7 +18,7 @@ export default function JourneyWizard({ onClose, onComplete }: { onClose: () => 
     targetCompanies: ''
   });
 
-  const [generatedPlan, setGeneratedPlan] = useState<any>(null);
+  const [generatedPlan, setGeneratedPlan] = useState<JourneyPlan | null>(null);
 
   const LONG_TERM_GOALS = [
     "Secure and stable employment",
@@ -183,7 +184,7 @@ export default function JourneyWizard({ onClose, onComplete }: { onClose: () => 
               </div>
               
               <div className="space-y-4">
-                {generatedPlan.milestones.map((m: any, idx: number) => (
+                {generatedPlan.milestones.map((m, idx) => (
                   <div key={idx} className="border border-border-light rounded-xl p-4 bg-bg-main">
                     <div className="flex justify-between items-start">
                       <div>

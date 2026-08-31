@@ -1,13 +1,14 @@
 ﻿"use client";
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Map, MapPin, ChevronRight, CheckCircle2, ArrowRight, Play, Compass, Loader2 } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { ChevronRight, CheckCircle2, ArrowRight, Play, Compass } from 'lucide-react';
 import JourneyWizard from './JourneyWizard';
 import JourneyTimeline from './JourneyTimeline';
+import type { ActiveJourney, JourneyMilestone } from '@/types/journey';
 
-export default function JobJourneySection({ initialJourney }: { initialJourney: any }) {
-  const [journey, setJourney] = useState(initialJourney);
+export default function JobJourneySection({ initialJourney }: { initialJourney: ActiveJourney | null }) {
+  const [journey] = useState(initialJourney);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   if (!journey) {
@@ -27,7 +28,7 @@ export default function JobJourneySection({ initialJourney }: { initialJourney: 
             Build My Job Journey <ArrowRight size={18} className="ml-2" />
           </button>
           <button className="text-text-muted hover:text-text-charcoal font-medium text-sm transition-colors">
-            I'll do this later
+            I’ll do this later
           </button>
         </div>
         <p className="text-xs text-text-muted mt-4">Takes approximately two minutes. You can change your route at any time.</p>
@@ -36,7 +37,6 @@ export default function JobJourneySection({ initialJourney }: { initialJourney: 
           {isWizardOpen && (
             <JourneyWizard 
               onClose={() => setIsWizardOpen(false)} 
-              onComplete={(newJourney) => setJourney(newJourney)} 
             />
           )}
         </AnimatePresence>
@@ -44,7 +44,7 @@ export default function JobJourneySection({ initialJourney }: { initialJourney: 
     );
   }
 
-  const currentMilestone = journey.job_milestones?.find((m: any) => m.id === journey.current_milestone_id) || journey.job_milestones?.[0];
+  const currentMilestone = journey.job_milestones?.find((milestone: JourneyMilestone) => milestone.id === journey.current_milestone_id) || journey.job_milestones?.[0];
   const nextAction = currentMilestone?.job_milestone_actions?.[0];
 
   return (
@@ -83,7 +83,7 @@ export default function JobJourneySection({ initialJourney }: { initialJourney: 
               <span className="text-sm font-bold text-primary-teal">{currentMilestone.progress || 0}% ready</span>
             </div>
             <p className="text-xs text-text-muted mt-2">
-              {currentMilestone.progress > 0 ? `${currentMilestone.job_milestone_actions?.length || 0} actions completed` : 'Complete today\'s recommended action to move one step closer.'}
+              {(currentMilestone.progress || 0) > 0 ? `${currentMilestone.job_milestone_actions?.length || 0} actions completed` : "Complete today’s recommended action to move one step closer."}
             </p>
           </div>
 
@@ -91,7 +91,7 @@ export default function JobJourneySection({ initialJourney }: { initialJourney: 
 
           <div className="flex-1 w-full">
             <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2 flex items-center">
-              <Play size={14} className="text-accent-orange mr-1.5" /> Today's Move
+              <Play size={14} className="text-accent-orange mr-1.5" /> Today’s Move
             </h3>
             
             {nextAction ? (
@@ -110,7 +110,7 @@ export default function JobJourneySection({ initialJourney }: { initialJourney: 
             ) : (
               <div className="border border-dashed border-border-light rounded-xl p-4 text-center text-text-muted bg-bg-hover/50">
                 <CheckCircle2 size={24} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm">You're all caught up for today!</p>
+                <p className="text-sm">You’re all caught up for today!</p>
               </div>
             )}
           </div>
@@ -121,10 +121,6 @@ export default function JobJourneySection({ initialJourney }: { initialJourney: 
         {isWizardOpen && (
           <JourneyWizard 
             onClose={() => setIsWizardOpen(false)} 
-            onComplete={(newJourney) => {
-              setJourney(newJourney);
-              setIsWizardOpen(false);
-            }} 
           />
         )}
       </AnimatePresence>

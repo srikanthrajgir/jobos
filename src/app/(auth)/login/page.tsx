@@ -79,7 +79,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </form>
 
         <div className="mt-8 text-center text-sm text-text-muted">
-          Don't have an account?{' '}
+          Don’t have an account?{' '}
           <Link href="/signup" className="text-primary-teal hover:text-primary-teal-dark font-bold transition-colors">
             Build My JobOS
           </Link>

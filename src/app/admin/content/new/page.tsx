@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Save, Sparkles } from 'lucide-react';
-import { getAIProvider } from '@/utils/ai/provider'; // Ideally a server action for this. Let's make a mock call.
 
 export default function NewArticlePage() {
   const [title, setTitle] = useState('');

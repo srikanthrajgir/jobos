@@ -1,7 +1,9 @@
 ﻿import Link from 'next/link';
-import { FileText, LayoutDashboard, Settings, Users, Briefcase } from 'lucide-react';
+import { FileText, LayoutDashboard, Settings } from 'lucide-react';
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { requireAdminPage } = await import('@/lib/auth');
+  await requireAdminPage();
   return (
     <div className="flex h-screen bg-bg-secondary overflow-hidden font-sans">
       <aside className="w-[260px] flex flex-col bg-bg-card border-r border-border-light z-20">
@@ -20,14 +22,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link href="/admin/content" className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-text-charcoal hover:bg-bg-hover transition-colors">
               <FileText size={20} className="text-text-muted" />
               <span className="text-sm tracking-wide font-medium">Job Intelligence</span>
-            </Link>
-            <Link href="/admin/companies" className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-text-charcoal hover:bg-bg-hover transition-colors">
-              <Briefcase size={20} className="text-text-muted" />
-              <span className="text-sm tracking-wide font-medium">Companies & Jobs</span>
-            </Link>
-            <Link href="/admin/users" className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-text-charcoal hover:bg-bg-hover transition-colors">
-              <Users size={20} className="text-text-muted" />
-              <span className="text-sm tracking-wide font-medium">Users</span>
             </Link>
             <Link href="/admin/ai" className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-text-charcoal hover:bg-bg-hover transition-colors">
               <Settings size={20} className="text-text-muted" />

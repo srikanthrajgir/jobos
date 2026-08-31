@@ -10,13 +10,6 @@ const Navbar = () => {
   const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
-    if (document.documentElement.classList.contains('dark')) {
-      setIsDark(true);
-    } else {
-      document.documentElement.classList.add('dark');
-      setIsDark(true);
-    }
-
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
     };

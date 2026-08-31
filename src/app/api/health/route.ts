@@ -14,7 +14,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ status: 'healthy', database: 'connected' }, { status: 200 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ status: 'degraded', database: 'disconnected' }, { status: 500 });
   }
 }

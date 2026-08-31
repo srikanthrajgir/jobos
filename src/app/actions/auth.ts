@@ -1,63 +1,56 @@
-﻿"use server";
+"use server";
 
-import { createClient } from '@/utils/supabase/server';
-import { redirect } from 'next/navigation';
-import { revalidatePath } from 'next/cache';
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/utils/supabase/server";
+import { getAppUrl } from "@/lib/env";
+import { loginSchema, signupSchema } from "@/lib/validation";
 
 export async function signInWithGoogle() {
   const supabase = await createClient();
+  const callback = new URL("/auth/callback", getAppUrl());
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-    },
+    provider: "google",
+    options: { redirectTo: callback.toString() },
   });
-
-  if (data.url) {
-    redirect(data.url);
-  }
+  if (error || !data.url) redirect("/login?message=Google sign-in is temporarily unavailable");
+  redirect(data.url);
 }
 
 export async function login(formData: FormData) {
-  const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
-  const supabase = await createClient();
-  
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
+  const result = loginSchema.safeParse({
+    email: formData.get("email"),
+    password: formData.get("password"),
   });
+  if (!result.success) redirect("/login?message=Enter a valid email and password");
 
-  if (error) {
-    return redirect('/login?message=Could not authenticate user');
-  }
-
-  return redirect('/app');
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword(result.data);
+  if (error) redirect("/login?message=Email or password is incorrect");
+  redirect("/app");
 }
 
 export async function signup(formData: FormData) {
-  const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
-  const supabase = await createClient();
-
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-    },
+  const result = signupSchema.safeParse({
+    email: formData.get("email"),
+    password: formData.get("password"),
   });
+  if (!result.success) redirect("/signup?message=Use a valid email and a password of at least 12 characters");
 
-  if (error) {
-    return redirect('/signup?message=Could not create user');
-  }
-
-  return redirect('/app');
+  const supabase = await createClient();
+  const callback = new URL("/auth/callback", getAppUrl());
+  const { data, error } = await supabase.auth.signUp({
+    ...result.data,
+    options: { emailRedirectTo: callback.toString() },
+  });
+  if (error) redirect("/signup?message=Account creation could not be completed");
+  if (data.session) redirect("/app");
+  redirect("/login?message=Check your email to verify your account");
 }
 
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  revalidatePath('/', 'layout');
-  redirect('/login');
+  revalidatePath("/", "layout");
+  redirect("/login");
 }

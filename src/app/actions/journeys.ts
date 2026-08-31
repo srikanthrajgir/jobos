@@ -1,103 +1,85 @@
-﻿"use server";
+"use server";
 
-import { createClient } from '@/utils/supabase/server';
-import { getAIProvider } from '@/utils/ai/provider';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/utils/supabase/server";
+import { getAIProvider } from "@/utils/ai/provider";
+import { requireUser } from "@/lib/auth";
+import { runTrackedAI } from "@/lib/ai-run";
+import { journeyPlanSchema, journeyRequestSchema } from "@/lib/validation";
 
-export async function generateJobJourney(payload: any) {
+export async function generateJobJourney(payload: unknown) {
+  const parsed = journeyRequestSchema.parse(payload);
+  const user = await requireUser();
+  const supabase = await createClient();
   const provider = getAIProvider();
-  const journeyPlan = await provider.generateJourney(payload);
-  return { success: true, plan: journeyPlan };
+  const plan = await runTrackedAI(
+    supabase,
+    user.id,
+    "job_journey",
+    JSON.stringify(parsed).length,
+    provider,
+    () => provider.generateJourney(parsed),
+  );
+  return { success: true as const, plan };
 }
 
-export async function saveJobJourney(plan: any) {
+export async function saveJobJourney(plan: unknown) {
+  const parsed = journeyPlanSchema.parse(plan);
+  const user = await requireUser();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
 
-  // 1. Insert Journey
-  const { data: journey, error: journeyError } = await supabase
-    .from('job_journeys')
-    .insert([{
-      user_id: user.id,
-      title: plan.journeyTitle,
-      summary: plan.summary,
-      primary_outcome: plan.milestones[plan.milestones.length - 1]?.target_role,
-      generated_by_ai: true
-    }])
-    .select()
-    .single();
-
-  if (journeyError) throw new Error(journeyError.message);
-
-  // 2. Insert Milestones
-  const milestonesToInsert = plan.milestones.map((m: any, idx: number) => ({
-    journey_id: journey.id,
+  const { data: journey, error: journeyError } = await supabase.from("job_journeys").insert({
     user_id: user.id,
-    stage_key: m.stage_key,
-    position: idx + 1,
-    title: m.title,
-    target_role: m.target_role,
-    description: m.description,
-    target_date: m.target_date,
-    status: idx === 0 ? 'in_progress' : 'not_started'
-  }));
+    title: parsed.journeyTitle,
+    summary: parsed.summary,
+    primary_outcome: parsed.milestones.at(-1)?.target_role,
+    generated_by_ai: true,
+  }).select("id").single();
+  if (journeyError || !journey) throw new Error("Could not save the job journey");
 
-  const { data: insertedMilestones, error: milestoneError } = await supabase
-    .from('job_milestones')
-    .insert(milestonesToInsert)
-    .select();
+  const { data: milestones, error: milestoneError } = await supabase.from("job_milestones").insert(
+    parsed.milestones.map((milestone, index) => ({
+      journey_id: journey.id,
+      user_id: user.id,
+      stage_key: milestone.stage_key,
+      position: index + 1,
+      title: milestone.title,
+      target_role: milestone.target_role,
+      description: milestone.description,
+      target_date: milestone.target_date,
+      status: index === 0 ? "in_progress" : "not_started",
+    })),
+  ).select("id, position");
+  if (milestoneError || !milestones?.length) throw new Error("Could not save journey milestones");
 
-  if (milestoneError) throw new Error(milestoneError.message);
-
-  // Set the first milestone as the current one
-  if (insertedMilestones && insertedMilestones.length > 0) {
-    const firstMilestone = insertedMilestones.find(m => m.position === 1);
-    if (firstMilestone) {
-      await supabase.from('job_journeys').update({ current_milestone_id: firstMilestone.id }).eq('id', journey.id);
+  await supabase.from("job_journeys").update({ current_milestone_id: milestones[0].id }).eq("id", journey.id).eq("user_id", user.id);
+  for (const milestone of milestones) {
+    const source = parsed.milestones[milestone.position - 1];
+    if (!source) continue;
+    const writes: Array<PromiseLike<unknown>> = [];
+    if (source.skills.length) {
+      writes.push(supabase.from("job_milestone_skills").insert(source.skills.map((skill) => ({ milestone_id: milestone.id, skill_name: skill }))));
     }
-
-    // Insert actions and skills for each milestone
-    for (const im of insertedMilestones) {
-      const pm = plan.milestones.find((m:any) => m.position === im.position || m.title === im.title);
-      if (pm) {
-        if (pm.skills && pm.skills.length > 0) {
-          const skillsToInsert = pm.skills.map((s: string) => ({
-            milestone_id: im.id,
-            skill_name: s
-          }));
-          await supabase.from('job_milestone_skills').insert(skillsToInsert);
-        }
-        if (pm.actions && pm.actions.length > 0) {
-          const actionsToInsert = pm.actions.map((a: any) => ({
-            milestone_id: im.id,
-            user_id: user.id,
-            title: a.title,
-            action_type: a.type
-          }));
-          await supabase.from('job_milestone_actions').insert(actionsToInsert);
-        }
-      }
+    if (source.actions.length) {
+      writes.push(supabase.from("job_milestone_actions").insert(source.actions.map((action) => ({ milestone_id: milestone.id, user_id: user.id, title: action.title, action_type: action.type }))));
     }
+    await Promise.all(writes);
   }
 
-  revalidatePath('/app');
-  return { success: true, journeyId: journey.id };
+  revalidatePath("/app");
+  return { success: true as const, journeyId: journey.id as string };
 }
 
 export async function getActiveJourney() {
+  const user = await requireUser();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data: journey } = await supabase
-    .from('job_journeys')
-    .select('*, job_milestones(*, job_milestone_skills(*), job_milestone_actions(*))')
-    .eq('user_id', user.id)
-    .is('archived_at', null)
-    .order('created_at', { ascending: false })
+  const { data } = await supabase
+    .from("job_journeys")
+    .select("id, title, summary, current_milestone_id, job_milestones(id, stage_key, position, title, target_role, description, target_date, status, job_milestone_skills(skill_name), job_milestone_actions(id, title, action_type, status))")
+    .eq("user_id", user.id)
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
     .limit(1)
-    .single();
-
-  return journey;
+    .maybeSingle();
+  return data || null;
 }

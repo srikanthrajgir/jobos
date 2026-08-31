@@ -1,71 +1,97 @@
-﻿# Hostinger Coolify Deployment Guide
+# JobOS production runbook: Coolify
 
-This document outlines the repeatable deployment process for JobOS on a Hostinger VPS using Coolify, targeting a production-ready Next.js Docker standalone build.
+JobOS ships as a standalone Next.js container running as an unprivileged user. Database migrations are deliberately separate from container startup so a web deployment cannot mutate production data unexpectedly.
 
-## 1. Supabase Project Setup
-- Create a new Supabase project for production.
-- Under **SQL Editor**, run the contents of `supabase/migrations/00000000000000_initial_schema.sql` to establish the schema. Note: **Do not** run destructive migrations automatically on container startup.
+## 1. Pre-deployment gate
 
-## 2. Auth Redirect URLs
-In the Supabase Dashboard (Authentication -> URL Configuration):
-- **Site URL**: `https://jobos.com.au`
-- **Redirect URIs**: 
-  - `http://localhost:3000/**` (Local)
-  - `https://jobos.com.au/**` (Production)
-  - `https://www.jobos.com.au/**` (Production WWW)
+Run locally or rely on the `CI` workflow on `main`:
 
-## 3. Storage Buckets & Policies
-In the Supabase Dashboard (Storage):
-- Create a **private** bucket named `resumes`.
-- Create a **public** bucket named `public_assets` for CMS imagery.
-- Ensure Row Level Security (RLS) restricts `resumes` access so users can only read/write their own UID folder.
+```text
+npm ci
+npm run verify
+npm run build
+```
 
-## 4. Environment Variables
-In Coolify, navigate to your resource's **Environment Variables** tab and add:
-- `NEXT_PUBLIC_APP_URL` = `https://jobos.com.au`
-- `NEXT_PUBLIC_SUPABASE_URL` = (From Supabase API settings)
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` = (From Supabase API settings)
-- `SUPABASE_SERVICE_ROLE_KEY` = (Server-only secret for admin actions)
-- `CRON_SECRET` = (Generate a secure random string)
+Do not deploy a revision with a failed check.
 
-## 5. Docker Deployment Settings
-In Coolify:
-- Source: GitHub Repository (`srikanthrajgir/jobos`)
-- Build Pack: `Docker` (Coolify will automatically detect the multi-stage `Dockerfile`)
-- Port: `3000` (Matches `EXPOSE 3000` in the Dockerfile)
-- Install Command / Build Command: Handled inside the Dockerfile.
+## 2. Supabase
 
-## 6. Health-Check Path
-- In the Coolify deployment health checks, point the HTTP health check to `/api/health`.
-- This endpoint safely verifies both the Node.js web process and the Supabase database connectivity without leaking credentials.
+Create a dedicated production project, then apply every file in `supabase/migrations` in filename order (`00000000000000` through `00000000000004`). Migration 4 safely reconciles installations where earlier `CREATE TABLE IF NOT EXISTS` statements left profile or résumé columns absent.
 
-## 7. Domain Configuration
-In your Hostinger DNS panel (or Cloudflare):
-- Point `@` (A Record) to your Hostinger VPS IP address.
-- Point `www` (A Record or CNAME) to your Hostinger VPS IP address.
-- In Coolify, add `https://jobos.com.au` and `https://www.jobos.com.au` to the application's Domains section.
+Create a private Storage bucket named `resumes`. Do not make this bucket public. The application writes objects under each authenticated user's ID and stores only the private object path.
 
-## 8. HTTPS / SSL
-- Enable **Auto SSL / Let's Encrypt** toggle inside the Coolify Domain settings. Coolify will automatically provision and renew the certificates.
+In Authentication → URL Configuration, set:
 
-## 9. Canonical Host Redirect
-- Pick `https://jobos.com.au` as the canonical URL. 
-- In Coolify or Next.js `next.config.ts`, ensure `www` requests are redirected via a 308 permanent redirect to the bare domain to avoid SEO duplicate content penalties.
+- Site URL: `https://jobos.com.au`
+- Allowed redirect URLs: `https://jobos.com.au/auth/callback` and the local callback used for development
+- Add `https://www.jobos.com.au/auth/callback` only during DNS migration; production application links are canonicalised to the bare domain
 
-## 10. Database Migrations
-- **Safe Execution:** Do *not* run migrations automatically via Docker `CMD`.
-- Execute them manually via the Supabase SQL editor or through a secure CI/CD pipeline using the Supabase CLI (`supabase db push`) after verifying non-destructive changes.
+Enable Google OAuth only after its client secret and exact callback URI are configured. Keep email confirmation enabled for public sign-up.
 
-## 11. Scheduled Jobs (Cron)
-- In Coolify, under the "Scheduled Tasks" or "Cron Jobs" section, you can hit internal API endpoints (e.g., `/api/cron/publish`) passing your `CRON_SECRET` as an Authorization header to trigger automated tasks.
+## 3. Email identity
 
-## 12. Logs & Diagnostics
-- If the deployment fails, go to the Coolify **Deployments** tab and click the specific commit to view the Docker build stream.
-- For runtime errors, navigate to the **Logs** tab in Coolify to view structured stdout/stderr logs from the Node.js process.
+Verify `jobos.com.au` or a dedicated sending subdomain in Resend. Publish its SPF and DKIM records and add a DMARC policy before enabling application delivery. Use a stable sender such as `JobOS Applications <applications@jobos.com.au>`; the candidate's address is set as Reply-To, never forged as From.
 
-## 13. Backups & Restores
-- **Database:** Supabase automatically handles daily backups. Go to Database -> Backups in Supabase to restore.
-- **Application:** Since the app is completely stateless Docker containers, simply pressing "Deploy" in Coolify on an older commit instantly rolls back the frontend/backend process.
+## 4. Coolify environment
 
-## 14. Zero-Downtime Updates
-- Coolify supports rolling updates by default. It will spin up the new container, wait for the `/api/health` check to pass, modify the proxy (Traefik/Caddy) to route traffic to the new container, and then safely tear down the old one.
+Set these as runtime secrets. Variables beginning with `NEXT_PUBLIC_` are intentionally browser-visible; all others must remain server-only.
+
+```text
+NEXT_PUBLIC_APP_URL=https://jobos.com.au
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5.6-terra
+OPENAI_BASE_URL=https://api.openai.com/v1
+RESEND_API_KEY=...
+APPLICATION_FROM_EMAIL=JobOS Applications <applications@jobos.com.au>
+CRON_SECRET=<at least 32 cryptographically random characters>
+NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<one stable 32-byte base64 value shared by all replicas>
+```
+
+Do not set `AI_PROVIDER=mock` in production; the application rejects it. Rotate the service-role, OpenAI, Resend and cron secrets if any value reaches logs or source control.
+
+## 5. Application resource
+
+- Source: this Git repository, branch `main`
+- Build pack: Dockerfile
+- Internal port: `3000`
+- Health check: `GET /api/health`
+- Domain: `https://jobos.com.au`
+- Optional alias: `https://www.jobos.com.au` (the app returns a permanent redirect)
+- TLS: Coolify-managed Let's Encrypt certificate
+
+Point the apex and `www` DNS records to the proxy, then wait for TLS to be valid before enabling the production hostname. The image includes its own health check and does not run as root.
+
+## 6. Opportunity sources
+
+Create enabled rows in `job_sources` only for official public APIs:
+
+- Greenhouse: `https://boards-api.greenhouse.io/v1/boards/<board-token>/jobs`
+- Lever: `https://api.lever.co/v0/postings/<site>` (or the official EU host)
+
+The ingestion worker rejects non-HTTPS URLs, credentials, redirects and hosts outside this allowlist. It caps response size and execution time.
+
+## 7. Scheduled jobs
+
+Configure Coolify scheduled HTTP jobs with `Authorization: Bearer <CRON_SECRET>`:
+
+- `POST https://jobos.com.au/api/cron/ingest` every 4–6 hours
+- `POST https://jobos.com.au/api/cron/match` once daily after ingestion
+
+Both endpoints fail closed when the secret is missing, short or incorrect. Watch the first runs and confirm source counts, per-user match counts and `ai_runs` audit records.
+
+## 8. Release and rollback
+
+Before promoting a release:
+
+- Confirm all five migrations are present in production.
+- Upload and edit a résumé with a test account.
+- Run one approved source ingestion and verify the opportunity URL opens on the official employer site.
+- Generate a fit analysis and application draft.
+- Send one application to a controlled mailbox; verify attachment, Reply-To, delivery event and pipeline task.
+- Confirm an ordinary account receives `403`/redirect protection for `/admin`.
+- Confirm `/api/health` is healthy and cron requests without the bearer secret receive `401`.
+
+For rollback, redeploy the last known-good Git revision. Database changes in migration 4 are additive; do not automatically reverse them. Restore data through the Supabase backup/PITR facility configured for the production plan, and test restoration periodically.

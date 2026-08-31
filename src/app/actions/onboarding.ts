@@ -1,83 +1,117 @@
-﻿"use server";
+"use server";
 
-import { createClient } from '@/utils/supabase/server';
-import { getAIProvider } from '@/utils/ai/provider';
-import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { createClient } from "@/utils/supabase/server";
+import { requireUser } from "@/lib/auth";
+import { careerPreferencesSchema, resumeBuilderSchema } from "@/lib/validation";
 
 export async function getOnboardingState() {
+  const user = await requireUser();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return redirect('/login');
+  let { data: profile } = await supabase
+    .from("profiles")
+    .select("onboarding_status")
+    .eq("id", user.id)
+    .maybeSingle();
 
-  let { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-  
   if (!profile) {
-    // Ensure profile exists
-    const { data: newProfile } = await supabase.from('profiles').insert([{ id: user.id, onboarding_status: 'resume_required' }]).select().single();
-    profile = newProfile;
+    const { data, error } = await supabase.from("profiles").insert({
+      id: user.id,
+      email: user.email,
+      onboarding_status: "resume_required",
+    }).select("onboarding_status").single();
+    if (error || !data) throw new Error("Could not initialise onboarding");
+    profile = data;
   }
-  return profile;
+  return { onboarding_status: profile.onboarding_status || "resume_required" };
 }
 
-export async function submitResumeBuilder(formData: any) {
+export async function markUploadedResumeReady(resumeId: string) {
+  const id = z.string().uuid().parse(resumeId);
+  const user = await requireUser();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
+  const { data: resume } = await supabase
+    .from("resumes")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .eq("processing_status", "ready")
+    .maybeSingle();
+  if (!resume) throw new Error("Processed resume not found");
 
-  // Save built resume
-  const { data: resume } = await supabase.from('resumes').insert([{
+  await supabase.from("resumes").update({ is_primary: false }).eq("user_id", user.id);
+  await supabase.from("resumes").update({ is_primary: true }).eq("id", id).eq("user_id", user.id);
+  const { error } = await supabase.from("profiles").update({
+    onboarding_status: "career_preferences_required",
+  }).eq("id", user.id);
+  if (error) throw new Error("Could not advance onboarding");
+  revalidatePath("/app/onboarding");
+  return { success: true as const };
+}
+
+export async function submitResumeBuilder(formData: unknown) {
+  const parsed = resumeBuilderSchema.parse(formData);
+  const user = await requireUser();
+  const supabase = await createClient();
+
+  await supabase.from("resumes").update({ is_primary: false }).eq("user_id", user.id);
+  const { error: resumeError } = await supabase.from("resumes").insert({
     user_id: user.id,
-    display_name: 'JobOS Built Resume',
-    source: 'builder',
-    parsed_data: formData,
-    processing_status: 'ready'
-  }]).select().single();
+    display_name: `${parsed.name} resume`,
+    source: "builder",
+    parsed_data: { summary: parsed.summary },
+    extracted_text: parsed.summary,
+    processing_status: "ready",
+    is_primary: true,
+  });
+  if (resumeError) throw new Error("Could not save the resume");
 
-  await supabase.from('profiles').update({ onboarding_status: 'career_preferences_required' }).eq('id', user.id);
-  revalidatePath('/app/onboarding');
-  return { success: true };
+  const { error } = await supabase.from("profiles").update({
+    onboarding_status: "career_preferences_required",
+  }).eq("id", user.id);
+  if (error) throw new Error("Could not advance onboarding");
+  revalidatePath("/app/onboarding");
+  return { success: true as const };
 }
 
-export async function parseUploadedResume(resumeId: string) {
-  // In a real app, this would read the file from storage and pass to AI
-  const provider = getAIProvider();
-  const text = await provider.extractResumeText("dummy_base64", "application/pdf");
-  
+export async function submitCareerPreferences(preferences: unknown) {
+  const parsed = careerPreferencesSchema.parse(preferences);
+  const user = await requireUser();
   const supabase = await createClient();
-  await supabase.from('resumes').update({
-    processing_status: 'ready',
-    parsed_data: { summary: text, experienceYears: 2, suggestedCareerLevel: 'early_career' }
-  }).eq('id', resumeId);
 
-  await supabase.from('profiles').update({ onboarding_status: 'career_preferences_required' }).eq('id', (await supabase.auth.getUser()).data.user!.id);
-  revalidatePath('/app/onboarding');
-}
+  const { data: existing } = await supabase
+    .from("career_preferences")
+    .select("id")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-export async function submitCareerPreferences(preferences: any) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
+  const write = existing
+    ? supabase.from("career_preferences").update({ ...parsed, confirmed_at: new Date().toISOString() }).eq("id", existing.id).eq("user_id", user.id)
+    : supabase.from("career_preferences").insert({ user_id: user.id, ...parsed });
+  const { error: preferenceError } = await write;
+  if (preferenceError) throw new Error("Could not save career preferences");
 
-  await supabase.from('career_preferences').insert([{
-    user_id: user.id,
-    ...preferences
-  }]);
-
-  await supabase.from('profiles').update({ onboarding_status: 'journey_decision_required' }).eq('id', user.id);
-  revalidatePath('/app/onboarding');
+  const { error } = await supabase.from("profiles").update({
+    onboarding_status: "journey_decision_required",
+  }).eq("id", user.id);
+  if (error) throw new Error("Could not advance onboarding");
+  revalidatePath("/app/onboarding");
+  return { success: true as const };
 }
 
 export async function completeOnboarding(journeyDecision: string) {
+  const decision = z.enum(["yes", "no"]).parse(journeyDecision);
+  const user = await requireUser();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Unauthorized");
-
-  await supabase.from('profiles').update({ 
-    onboarding_status: 'completed',
-    journey_decision: journeyDecision,
-    onboarding_completed_at: new Date().toISOString()
-  }).eq('id', user.id);
-
-  redirect('/app');
+  const { error } = await supabase.from("profiles").update({
+    onboarding_status: "completed",
+    journey_decision: decision,
+    onboarding_completed_at: new Date().toISOString(),
+  }).eq("id", user.id);
+  if (error) throw new Error("Could not complete onboarding");
+  redirect("/app");
 }

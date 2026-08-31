@@ -1,79 +1,96 @@
-﻿"use client";
+"use client";
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Inbox, Bookmark, CheckCircle2, XCircle, Search, MapPin, Briefcase, DollarSign, Calendar, Star, Zap, EyeOff, Loader2, Building2, Target } from 'lucide-react';
-import { updateMatchStatus, getApplicationDraft, confirmApplication } from '@/app/actions/opportunities';
+import { useMemo, useState } from "react";
+import {
+  Bookmark, Briefcase, Building2, Calendar, CheckCircle2, DollarSign,
+  EyeOff, Inbox, Loader2, MapPin, Search, Star, Target, XCircle, Zap,
+} from "lucide-react";
+import {
+  confirmApplication,
+  getApplicationDraft,
+  updateMatchStatus,
+  type OpportunityMatch,
+} from "@/app/actions/opportunities";
 
 const TABS = [
-  { id: 'new', label: 'For You', icon: Inbox },
-  { id: 'saved', label: 'Saved', icon: Bookmark },
-  { id: 'applied', label: 'Applied', icon: CheckCircle2 },
-  { id: 'dismissed', label: 'Dismissed', icon: XCircle }
-];
+  { id: "new", label: "For You", icon: Inbox },
+  { id: "saved", label: "Saved", icon: Bookmark },
+  { id: "applied", label: "Applied", icon: CheckCircle2 },
+  { id: "dismissed", label: "Dismissed", icon: XCircle },
+] as const;
 
-export default function OpportunityLayout({ initialMatches }: { initialMatches: any[] }) {
-  const [activeTab, setActiveTab] = useState('new');
+type MatchStatus = typeof TABS[number]["id"];
+type Draft = { subject: string; body: string; recipient: string; idempotencyKey: string };
+
+export default function OpportunityLayout({ initialMatches }: { initialMatches: OpportunityMatch[] }) {
+  const [activeTab, setActiveTab] = useState<MatchStatus>("new");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [matches, setMatches] = useState(initialMatches);
+  const [query, setQuery] = useState("");
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
-  
-  // App workflow state
-  const [appStep, setAppStep] = useState(0); // 0 = none, 1 = review, 2 = confirm
-  const [appDraft, setAppDraft] = useState<any>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [authorized, setAuthorized] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const filteredMatches = matches.filter(m => m.status === activeTab);
-  
-  // Select first match automatically if desktop and none selected
-  if (filteredMatches.length > 0 && !selectedId) {
-    setSelectedId(filteredMatches[0].opportunity_id);
-  } else if (filteredMatches.length === 0 && selectedId) {
-    setSelectedId(null);
-  }
+  const filteredMatches = useMemo(() => matches.filter((match) => {
+    if (match.status !== activeTab) return false;
+    const opportunity = match.job_opportunities;
+    const haystack = `${opportunity?.title || ""} ${opportunity?.company_name || ""}`.toLowerCase();
+    return haystack.includes(query.trim().toLowerCase());
+  }), [activeTab, matches, query]);
 
-  const selectedMatch = matches.find(m => m.opportunity_id === selectedId);
-  const opp = selectedMatch?.job_opportunities;
+  const selectedMatch = matches.find((match) => match.opportunity_id === selectedId);
+  const opportunity = selectedMatch?.job_opportunities;
 
-  const handleStatusUpdate = async (id: string, status: 'saved' | 'dismissed' | 'applied') => {
-    setLoadingAction(`${id}-${status}`);
+  const updateStatus = async (status: "new" | "saved" | "dismissed") => {
+    if (!selectedMatch) return;
+    const previous = matches;
+    setLoadingAction(status);
+    setMessage("");
+    setMatches((items) => items.map((item) => item.id === selectedMatch.id ? { ...item, status } : item));
     try {
-      await updateMatchStatus(matches.find(m => m.opportunity_id === id)!.id, status);
-      setMatches(matches.map(m => m.opportunity_id === id ? { ...m, status } : m));
-      setSelectedId(null);
-      setAppStep(0);
-    } catch (e) {
-      console.error(e);
+      await updateMatchStatus(selectedMatch.id, status);
+    } catch (error) {
+      setMatches(previous);
+      setMessage(error instanceof Error ? error.message : "The opportunity could not be updated.");
     } finally {
       setLoadingAction(null);
     }
   };
 
-  const handleStartApplication = async (id: string) => {
-    setLoadingAction(`${id}-draft`);
+  const startApplication = async () => {
+    if (!selectedId) return;
+    setLoadingAction("draft");
+    setMessage("");
     try {
-      const draft = await getApplicationDraft(id);
-      setAppDraft(draft);
-      setAppStep(1);
-    } catch(e) {
-      console.error(e);
+      const prepared = await getApplicationDraft(selectedId);
+      setDraft({ ...prepared, idempotencyKey: crypto.randomUUID() });
+      setAuthorized(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The application draft could not be prepared.");
     } finally {
       setLoadingAction(null);
     }
   };
 
-  const handleConfirmApplication = async (id: string) => {
-    setLoadingAction(`${id}-confirm`);
+  const submitApplication = async () => {
+    if (!selectedId || !draft || !authorized) return;
+    setLoadingAction("confirm");
+    setMessage("");
     try {
-      await confirmApplication(id, 'email', {
-        recipient: opp.application_email,
-        subject: appDraft.subject,
-        body: appDraft.body
+      await confirmApplication({
+        opportunityId: selectedId,
+        subject: draft.subject,
+        body: draft.body,
+        authorized: true,
+        idempotencyKey: draft.idempotencyKey,
       });
-      setMatches(matches.map(m => m.opportunity_id === id ? { ...m, status: 'applied' } : m));
-      setAppStep(0);
-      setSelectedId(null);
-    } catch(e) {
-      console.error(e);
+      setMatches((items) => items.map((item) => item.opportunity_id === selectedId ? { ...item, status: "applied" } : item));
+      setDraft(null);
+      setAuthorized(false);
+      setMessage("Application sent and added to your pipeline.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The application could not be sent. It is safe to retry.");
     } finally {
       setLoadingAction(null);
     }
@@ -81,298 +98,121 @@ export default function OpportunityLayout({ initialMatches }: { initialMatches: 
 
   return (
     <div className="flex h-full flex-col">
-      {/* Tabs */}
-      <div className="flex border-b border-border-light shrink-0 overflow-x-auto custom-scrollbar">
-        {TABS.map(tab => (
+      <div className="flex shrink-0 overflow-x-auto border-b border-border-light">
+        {TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => { setActiveTab(tab.id); setSelectedId(null); setAppStep(0); }}
-            className={`flex items-center space-x-2 px-6 py-4 font-bold text-sm tracking-wide transition-colors whitespace-nowrap border-b-2 ${
-              activeTab === tab.id 
-                ? 'border-primary-teal text-primary-teal' 
-                : 'border-transparent text-text-muted hover:text-text-charcoal hover:bg-bg-hover'
-            }`}
+            onClick={() => { setActiveTab(tab.id); setSelectedId(null); setDraft(null); setMessage(""); }}
+            className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-5 py-4 text-sm font-bold ${activeTab === tab.id ? "border-primary-teal text-primary-teal" : "border-transparent text-text-muted hover:bg-bg-hover hover:text-text-charcoal"}`}
           >
-            <tab.icon size={18} />
-            <span>{tab.label}</span>
-            <span className="ml-2 bg-bg-secondary text-text-muted px-2 py-0.5 rounded-full text-xs border border-border-light">
-              {matches.filter(m => m.status === tab.id).length}
-            </span>
+            <tab.icon size={18} /> {tab.label}
+            <span className="rounded-full border border-border-light bg-bg-secondary px-2 py-0.5 text-xs">{matches.filter((item) => item.status === tab.id).length}</span>
           </button>
         ))}
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left List */}
-        <div className={`w-full md:w-[40%] border-r border-border-light flex flex-col ${selectedId && 'hidden md:flex'}`}>
-          <div className="p-4 border-b border-border-light shrink-0">
-            <div className="relative">
+      <div className="flex flex-1 overflow-hidden">
+        <aside className={`w-full flex-col border-r border-border-light md:flex md:w-[40%] ${selectedId ? "hidden" : "flex"}`}>
+          <div className="shrink-0 border-b border-border-light p-4">
+            <label className="relative block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
-              <input 
-                type="text" 
-                placeholder="Search titles or companies..." 
-                className="w-full bg-bg-secondary border border-border-light rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-primary-teal focus:ring-1 focus:ring-primary-teal text-text-charcoal"
-              />
-            </div>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search titles or companies" className="w-full rounded-xl border border-border-light bg-bg-secondary py-2 pl-10 pr-4 text-sm outline-none focus:border-primary-teal" />
+            </label>
           </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
+          <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {filteredMatches.length === 0 ? (
-              <div className="text-center p-8">
-                <Inbox size={48} className="mx-auto text-border-light mb-4" />
-                <p className="text-text-heading font-bold mb-1">Nothing here yet</p>
-                <p className="text-sm text-text-muted">Opportunities will appear here based on your preferences.</p>
+              <div className="p-8 text-center">
+                <Inbox size={44} className="mx-auto mb-4 text-border-hover" />
+                <p className="font-bold text-text-heading">Nothing here yet</p>
+                <p className="mt-1 text-sm text-text-muted">New verified opportunities will appear after the daily matching run.</p>
               </div>
-            ) : (
-              filteredMatches.map((match) => {
-                const job = match.job_opportunities;
-                const isSelected = selectedId === match.opportunity_id;
-                
-                let badgeColor = "bg-primary-teal-light text-primary-teal-dark";
-                if (match.match_category === 'Strong Match') badgeColor = "bg-green-500/10 text-green-500 border border-green-500/20";
-                else if (match.match_category === 'Stretch Opportunity') badgeColor = "bg-accent-orange/10 text-accent-orange border border-accent-orange/20";
-
-                return (
-                  <button
-                    key={match.opportunity_id}
-                    onClick={() => { setSelectedId(match.opportunity_id); setAppStep(0); }}
-                    className={`w-full text-left p-4 rounded-xl border transition-all ${
-                      isSelected 
-                        ? 'bg-bg-hover border-primary-teal shadow-sm' 
-                        : 'bg-bg-main border-border-light hover:border-text-muted'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${badgeColor}`}>
-                        {match.match_category}
-                      </span>
-                      <span className="text-xs text-text-muted">{new Date(match.batch_date).toLocaleDateString()}</span>
-                    </div>
-                    
-                    <h3 className="font-bold text-text-heading text-lg leading-tight mb-1">{job.title}</h3>
-                    <p className="text-sm font-medium text-text-charcoal flex items-center mb-3">
-                      <Building2 size={14} className="mr-1.5" /> {job.company_name || 'Unknown Company'}
-                    </p>
-                    
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      <span className="flex items-center text-xs font-medium text-text-muted bg-bg-secondary px-2 py-1 rounded">
-                        <MapPin size={12} className="mr-1" /> {job.suburb || 'Remote'}
-                      </span>
-                      <span className="flex items-center text-xs font-medium text-text-muted bg-bg-secondary px-2 py-1 rounded">
-                        <Briefcase size={12} className="mr-1" /> {job.employment_type || 'Full-time'}
-                      </span>
-                    </div>
-                    
-                    {match.match_reasons && match.match_reasons[0] && (
-                      <div className="text-sm text-text-charcoal bg-bg-secondary p-3 rounded-lg border border-border-light">
-                        <span className="flex items-start">
-                          <Star size={14} className="text-accent-orange mr-2 mt-0.5 shrink-0" />
-                          <span className="line-clamp-2">{match.match_reasons[0]}</span>
-                        </span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })
-            )}
+            ) : filteredMatches.map((match) => {
+              const job = match.job_opportunities;
+              if (!job) return null;
+              return (
+                <button key={match.id} onClick={() => setSelectedId(match.opportunity_id)} className={`w-full rounded-xl border p-4 text-left transition ${selectedId === match.opportunity_id ? "border-primary-teal bg-bg-hover" : "border-border-light bg-bg-main hover:border-text-muted"}`}>
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <span className="rounded-md bg-primary-teal-light px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-teal-dark">{match.match_category || "Matched"}</span>
+                    <span className="text-xs text-text-muted">{new Date(match.batch_date).toLocaleDateString("en-AU")}</span>
+                  </div>
+                  <h3 className="text-lg font-bold leading-tight text-text-heading">{job.title}</h3>
+                  <p className="mt-1 flex items-center text-sm font-medium text-text-charcoal"><Building2 size={14} className="mr-1.5" />{job.company_name || "Unknown company"}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-text-muted">
+                    <span className="rounded bg-bg-secondary px-2 py-1"><MapPin size={12} className="mr-1 inline" />{job.suburb || job.work_arrangement || "Location not listed"}</span>
+                    <span className="rounded bg-bg-secondary px-2 py-1"><Briefcase size={12} className="mr-1 inline" />{job.employment_type || "Type not listed"}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </aside>
 
-        {/* Right Details */}
-        <div className={`w-full md:w-[60%] bg-bg-main overflow-y-auto ${!selectedId && 'hidden md:block'}`}>
-          {selectedId && opp ? (
-            <div className="p-6 md:p-8 animate-in fade-in duration-300 relative">
-              
-              <button 
-                className="md:hidden mb-6 flex items-center text-sm font-bold text-text-muted hover:text-text-charcoal transition-colors"
-                onClick={() => setSelectedId(null)}
-              >
-                ← Back to list
-              </button>
-
-              <div className="flex flex-col md:flex-row md:items-start justify-between mb-8">
+        <main className={`w-full overflow-y-auto bg-bg-main md:block md:w-[60%] ${selectedId ? "block" : "hidden"}`}>
+          {opportunity && selectedMatch ? (
+            <div className="p-6 md:p-8">
+              <button onClick={() => setSelectedId(null)} className="mb-5 text-sm font-bold text-text-muted md:hidden">← Back to list</button>
+              <div className="mb-7 flex flex-col justify-between gap-4 md:flex-row md:items-start">
                 <div>
-                  <h2 className="text-3xl font-bold text-text-heading mb-2">{opp.title}</h2>
-                  <p className="text-lg font-medium text-primary-teal flex items-center">
-                    <Building2 size={18} className="mr-2" /> {opp.company_name || 'Unknown Company'}
-                  </p>
+                  <h2 className="text-3xl font-bold text-text-heading">{opportunity.title}</h2>
+                  <p className="mt-2 flex items-center text-lg font-medium text-primary-teal"><Building2 size={18} className="mr-2" />{opportunity.company_name || "Unknown company"}</p>
                 </div>
-                
-                {appStep === 0 && (
-                  <div className="flex items-center space-x-3 mt-4 md:mt-0">
-                    {activeTab !== 'dismissed' && activeTab !== 'applied' && (
-                      <button 
-                        onClick={() => handleStatusUpdate(selectedId, 'dismissed')}
-                        disabled={!!loadingAction}
-                        className="p-2.5 rounded-xl border border-border-light text-text-muted hover:bg-bg-hover hover:text-red-500 hover:border-red-500 transition-colors tooltip"
-                        title="Not for me"
-                      >
-                        {loadingAction === `${selectedId}-dismissed` ? <Loader2 size={20} className="animate-spin" /> : <EyeOff size={20} />}
-                      </button>
-                    )}
-                    {activeTab !== 'saved' && activeTab !== 'applied' && activeTab !== 'dismissed' && (
-                      <button 
-                        onClick={() => handleStatusUpdate(selectedId, 'saved')}
-                        disabled={!!loadingAction}
-                        className="p-2.5 rounded-xl border border-border-light text-text-muted hover:bg-bg-hover hover:text-text-charcoal hover:border-text-charcoal transition-colors tooltip"
-                        title="Save for later"
-                      >
-                        {loadingAction === `${selectedId}-saved` ? <Loader2 size={20} className="animate-spin" /> : <Bookmark size={20} />}
-                      </button>
-                    )}
-                    {activeTab !== 'applied' && (
-                      <button 
-                        onClick={() => handleStartApplication(selectedId)}
-                        disabled={!!loadingAction}
-                        className="px-6 py-2.5 rounded-xl font-bold bg-primary-teal text-bg-main hover:bg-primary-teal-dark shadow-md transition-colors flex items-center"
-                      >
-                        {loadingAction === `${selectedId}-draft` ? <Loader2 size={18} className="animate-spin mr-2" /> : <Zap size={18} className="mr-2" />}
-                        Apply with JobOS
-                      </button>
-                    )}
+                {!draft && activeTab !== "applied" && (
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => void updateStatus(activeTab === "saved" ? "new" : "saved")} disabled={Boolean(loadingAction)} title={activeTab === "saved" ? "Move back to For You" : "Save for later"} className="rounded-xl border border-border-light p-2.5 text-text-muted hover:text-primary-teal"><Bookmark size={20} /></button>
+                    <button onClick={() => void updateStatus("dismissed")} disabled={Boolean(loadingAction)} title="Dismiss" className="rounded-xl border border-border-light p-2.5 text-text-muted hover:text-red-500"><EyeOff size={20} /></button>
+                    {opportunity.application_mode === "email" && opportunity.application_email ? (
+                      <button onClick={startApplication} disabled={Boolean(loadingAction)} className="inline-flex items-center rounded-xl bg-primary-teal px-5 py-2.5 font-bold text-bg-main disabled:opacity-50">{loadingAction === "draft" ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Zap size={18} className="mr-2" />}Apply with JobOS</button>
+                    ) : opportunity.application_url ? (
+                      <a href={opportunity.application_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-xl bg-primary-teal px-5 py-2.5 font-bold text-bg-main">Apply on employer site</a>
+                    ) : null}
                   </div>
                 )}
               </div>
 
-              {appStep === 1 && appDraft && (
-                <div className="bg-bg-secondary border border-primary-teal rounded-2xl p-6 mb-8 shadow-sm">
-                  <h3 className="font-bold text-lg text-primary-teal-dark mb-4 flex items-center">
-                    <Zap size={20} className="mr-2" /> Review Application Draft
-                  </h3>
-                  
-                  <div className="space-y-4 bg-bg-card p-4 rounded-xl border border-border-light mb-6">
-                    <div>
-                      <span className="text-xs font-bold text-text-muted uppercase">To:</span>
-                      <p className="text-sm text-text-charcoal font-medium mt-0.5">{opp.application_email || 'careers@example.com'}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-text-muted uppercase">Subject:</span>
-                      <input 
-                        type="text" 
-                        value={appDraft.subject}
-                        onChange={(e) => setAppDraft({...appDraft, subject: e.target.value})}
-                        className="w-full bg-bg-input border border-border-light rounded-lg p-2 text-sm text-text-charcoal font-medium mt-1 focus:border-primary-teal focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-text-muted uppercase">Message:</span>
-                      <textarea 
-                        rows={8}
-                        value={appDraft.body}
-                        onChange={(e) => setAppDraft({...appDraft, body: e.target.value})}
-                        className="w-full bg-bg-input border border-border-light rounded-lg p-3 text-sm text-text-charcoal font-medium mt-1 focus:border-primary-teal focus:outline-none resize-none"
-                      />
-                    </div>
+              {draft && (
+                <section className="mb-8 rounded-2xl border border-primary-teal bg-bg-secondary p-6">
+                  <h3 className="mb-4 flex items-center text-lg font-bold text-primary-teal-dark"><Zap size={20} className="mr-2" />Review application</h3>
+                  <div className="space-y-4 rounded-xl border border-border-light bg-bg-card p-4">
+                    <div><span className="text-xs font-bold uppercase text-text-muted">To</span><p className="mt-1 text-sm font-medium text-text-charcoal">{draft.recipient}</p></div>
+                    <label className="block text-xs font-bold uppercase text-text-muted">Subject<input value={draft.subject} maxLength={200} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} className="mt-1 w-full rounded-lg border border-border-light bg-bg-input p-2 text-sm font-medium normal-case text-text-charcoal" /></label>
+                    <label className="block text-xs font-bold uppercase text-text-muted">Message<textarea value={draft.body} maxLength={20000} rows={10} onChange={(event) => setDraft({ ...draft, body: event.target.value })} className="mt-1 w-full resize-y rounded-lg border border-border-light bg-bg-input p-3 text-sm font-medium normal-case text-text-charcoal" /></label>
                   </div>
-
-                  <label className="flex items-start space-x-3 cursor-pointer mb-6">
-                    <input type="checkbox" className="mt-1 rounded text-primary-teal focus:ring-primary-teal w-4 h-4 bg-bg-input border-border-light" required id="confirmApp" />
-                    <span className="text-sm font-medium text-text-charcoal">
-                      I have reviewed this application and authorise JobOS to submit it on my behalf.
-                    </span>
-                  </label>
-
-                  <div className="flex space-x-4">
-                    <button 
-                      onClick={() => setAppStep(0)}
-                      className="px-6 py-2.5 rounded-xl font-bold bg-bg-card border border-border-light text-text-charcoal hover:bg-bg-hover transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      onClick={() => {
-                        const cb = document.getElementById('confirmApp') as HTMLInputElement;
-                        if(cb.checked) handleConfirmApplication(selectedId);
-                        else alert('Please confirm authorisation first.');
-                      }}
-                      disabled={!!loadingAction}
-                      className="flex-1 px-6 py-2.5 rounded-xl font-bold bg-primary-teal text-bg-main hover:bg-primary-teal-dark shadow-md transition-colors flex justify-center items-center"
-                    >
-                      {loadingAction === `${selectedId}-confirm` ? <Loader2 size={18} className="animate-spin mr-2" /> : null}
-                      Submit Application
-                    </button>
+                  <label className="my-5 flex cursor-pointer items-start gap-3 text-sm font-medium text-text-charcoal"><input type="checkbox" checked={authorized} onChange={(event) => setAuthorized(event.target.checked)} className="mt-1 h-4 w-4" />I reviewed this message and authorise JobOS to email it with my canonical resume attached.</label>
+                  <div className="flex gap-3">
+                    <button onClick={() => { setDraft(null); setAuthorized(false); }} className="rounded-xl border border-border-light bg-bg-card px-5 py-2.5 font-bold text-text-charcoal">Cancel</button>
+                    <button onClick={submitApplication} disabled={!authorized || Boolean(loadingAction)} className="flex-1 rounded-xl bg-primary-teal px-5 py-2.5 font-bold text-bg-main disabled:opacity-50">{loadingAction === "confirm" ? "Sending securely…" : "Send application"}</button>
                   </div>
-                </div>
+                </section>
               )}
 
-              {/* Job Details Overview */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div className="bg-bg-secondary p-4 rounded-xl border border-border-light">
-                  <MapPin size={16} className="text-text-muted mb-2" />
-                  <p className="text-xs text-text-muted font-bold uppercase tracking-wider mb-1">Location</p>
-                  <p className="text-sm font-medium text-text-charcoal">{opp.suburb}, {opp.state}</p>
-                </div>
-                <div className="bg-bg-secondary p-4 rounded-xl border border-border-light">
-                  <Briefcase size={16} className="text-text-muted mb-2" />
-                  <p className="text-xs text-text-muted font-bold uppercase tracking-wider mb-1">Type</p>
-                  <p className="text-sm font-medium text-text-charcoal">{opp.employment_type || 'Not provided'}</p>
-                </div>
-                <div className="bg-bg-secondary p-4 rounded-xl border border-border-light">
-                  <DollarSign size={16} className="text-text-muted mb-2" />
-                  <p className="text-xs text-text-muted font-bold uppercase tracking-wider mb-1">Salary</p>
-                  <p className="text-sm font-medium text-text-charcoal">
-                    {opp.salary_min ? `$${opp.salary_min.toLocaleString()}` : 'Not provided'}
-                  </p>
-                </div>
-                <div className="bg-bg-secondary p-4 rounded-xl border border-border-light">
-                  <Calendar size={16} className="text-text-muted mb-2" />
-                  <p className="text-xs text-text-muted font-bold uppercase tracking-wider mb-1">Published</p>
-                  <p className="text-sm font-medium text-text-charcoal">
-                    {opp.published_at ? new Date(opp.published_at).toLocaleDateString() : 'Recent'}
-                  </p>
-                </div>
+              <p className="mb-5 min-h-5 text-sm text-text-muted" role="status" aria-live="polite">{message}</p>
+
+              <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+                <Stat icon={MapPin} label="Location" value={[opportunity.suburb, opportunity.state].filter(Boolean).join(", ") || opportunity.work_arrangement || "Not listed"} />
+                <Stat icon={Briefcase} label="Type" value={opportunity.employment_type || "Not listed"} />
+                <Stat icon={DollarSign} label="Salary" value={opportunity.salary_min ? `${opportunity.salary_currency || "$"}${opportunity.salary_min.toLocaleString()}` : "Not listed"} />
+                <Stat icon={Calendar} label="Published" value={opportunity.published_at ? new Date(opportunity.published_at).toLocaleDateString("en-AU") : "Recent"} />
               </div>
 
-              {/* AI Match Summary */}
-              {selectedMatch && (
-                <div className="mb-8 border border-border-light rounded-xl overflow-hidden">
-                  <div className="bg-bg-secondary px-5 py-3 border-b border-border-light flex items-center">
-                    <Star size={16} className="text-accent-orange mr-2" />
-                    <h3 className="font-bold text-sm uppercase tracking-wider text-text-heading">Why JobOS Selected This</h3>
-                  </div>
-                  <div className="p-5 bg-bg-card">
-                    <ul className="space-y-3">
-                      {selectedMatch.match_reasons?.map((reason: string, i: number) => (
-                        <li key={i} className="flex items-start text-sm font-medium text-text-charcoal">
-                          <CheckCircle2 size={16} className="text-green-500 mr-2 mt-0.5 shrink-0" />
-                          {reason}
-                        </li>
-                      ))}
-                      {selectedMatch.potential_gaps?.map((gap: string, i: number) => (
-                        <li key={i} className="flex items-start text-sm font-medium text-text-charcoal">
-                          <XCircle size={16} className="text-accent-orange mr-2 mt-0.5 shrink-0" />
-                          {gap}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
+              <section className="mb-8 overflow-hidden rounded-xl border border-border-light">
+                <header className="flex items-center border-b border-border-light bg-bg-secondary px-5 py-3"><Star size={16} className="mr-2 text-accent-orange" /><h3 className="text-sm font-bold uppercase tracking-wider text-text-heading">Why JobOS selected this</h3></header>
+                <ul className="space-y-3 bg-bg-card p-5">
+                  {selectedMatch.match_reasons.map((reason) => <li key={reason} className="flex items-start text-sm font-medium text-text-charcoal"><CheckCircle2 size={16} className="mr-2 mt-0.5 shrink-0 text-green-500" />{reason}</li>)}
+                  {selectedMatch.potential_gaps.map((gap) => <li key={gap} className="flex items-start text-sm font-medium text-text-charcoal"><XCircle size={16} className="mr-2 mt-0.5 shrink-0 text-accent-orange" />{gap}</li>)}
+                </ul>
+              </section>
 
-              {/* Description Excerpt */}
-              <div className="prose prose-invert max-w-none mb-8">
-                <h3 className="text-xl font-bold text-text-heading mb-4 border-b border-border-light pb-2">About the Role</h3>
-                <p className="text-text-charcoal font-medium leading-relaxed whitespace-pre-wrap">{opp.description_excerpt}</p>
-              </div>
-              
-              {/* Note on data source */}
-              <div className="bg-bg-secondary border border-border-light p-4 rounded-xl flex items-start text-xs text-text-muted">
-                <Search size={14} className="mr-2 mt-0.5 shrink-0" />
-                <p>This opportunity was discovered via authorised channels. Details have been extracted securely. Always verify critical information prior to interview.</p>
-              </div>
-
+              <section><h3 className="mb-4 border-b border-border-light pb-2 text-xl font-bold text-text-heading">About the role</h3><p className="whitespace-pre-wrap font-medium leading-relaxed text-text-charcoal">{opportunity.description_excerpt || "The employer has not supplied a description excerpt."}</p></section>
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center text-center p-8 bg-bg-main">
-              <div>
-                <Target size={48} className="mx-auto text-border-light mb-4" />
-                <p className="text-text-heading font-bold mb-1">Select an opportunity</p>
-                <p className="text-sm text-text-muted">Review the match details and prepare your application.</p>
-              </div>
-            </div>
+            <div className="flex h-full items-center justify-center p-8 text-center"><div><Target size={48} className="mx-auto mb-4 text-border-hover" /><p className="font-bold text-text-heading">Select an opportunity</p><p className="mt-1 text-sm text-text-muted">Review the match details and prepare your application.</p></div></div>
           )}
-        </div>
+        </main>
       </div>
     </div>
   );
+}
+
+function Stat({ icon: Icon, label, value }: { icon: typeof MapPin; label: string; value: string }) {
+  return <div className="rounded-xl border border-border-light bg-bg-secondary p-4"><Icon size={16} className="mb-2 text-text-muted" /><p className="mb-1 text-xs font-bold uppercase tracking-wider text-text-muted">{label}</p><p className="text-sm font-medium text-text-charcoal">{value}</p></div>;
 }

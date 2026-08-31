@@ -1,9 +1,9 @@
 ﻿"use client";
 
-import { motion } from "framer-motion";
 import { CheckCircle2, Circle, MapPin, Navigation, TrendingUp, Anchor, Briefcase } from "lucide-react";
+import type { JourneyMilestone } from "@/types/journey";
 
-export default function JourneyTimeline({ milestones, currentMilestoneId }: { milestones: any[], currentMilestoneId: string }) {
+export default function JourneyTimeline({ milestones, currentMilestoneId }: { milestones: JourneyMilestone[] | null | undefined; currentMilestoneId?: string | null }) {
   if (!milestones || milestones.length === 0) return null;
 
   const sortedMilestones = [...milestones].sort((a, b) => a.position - b.position);
