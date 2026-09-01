@@ -1,4 +1,7 @@
-FROM node:20-alpine AS base
+# Node 22, not 20: every @supabase/* package declares engines.node >=22.0.0,
+# and Supabase is a runtime dependency. Keep this major in step with
+# package.json's engines.node — nodeVersion.test.ts fails if they drift.
+FROM node:22.20-alpine AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install dependencies only when needed
