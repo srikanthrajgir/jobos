@@ -94,7 +94,20 @@ class OpenAIProvider implements AIProvider {
       cache: "no-store",
     });
 
-    if (!response.ok) throw new Error(`AI provider request failed with status ${response.status}`);
+    if (!response.ok) {
+      // The status alone cannot distinguish a bad model from a bad key, and the
+      // body is the only place that says which. Take just the machine-readable
+      // code — never the prose, which can quote the prompt back.
+      let reason = "";
+      try {
+        const body = await response.json() as { error?: { code?: string; type?: string } };
+        const code = body.error?.code || body.error?.type;
+        if (code) reason = ` (${String(code).slice(0, 60)})`;
+      } catch {
+        // Non-JSON body (gateway HTML, empty 502): the status stands on its own.
+      }
+      throw new Error(`AI provider request failed with status ${response.status}${reason}`);
+    }
     const payload = await response.json() as OpenAIResponseShape;
     return extractOpenAIText(payload);
   }

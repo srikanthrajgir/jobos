@@ -49,7 +49,12 @@ export async function runTrackedAI<T>(
   } catch (error) {
     await supabase.from("ai_runs").update({
       status: "failed",
-      error_code: error instanceof Error ? error.name.slice(0, 80) : "UnknownError",
+      // error.name is "Error" for every plain throw, which made every failure
+      // look identical in the audit table. Keep the message — it carries the
+      // provider status and code, and these strings are ours, not user input.
+      error_code: error instanceof Error
+        ? `${error.name}: ${error.message}`.slice(0, 200)
+        : "UnknownError",
       completed_at: new Date().toISOString(),
     }).eq("id", run.id).eq("user_id", userId);
     throw error;
