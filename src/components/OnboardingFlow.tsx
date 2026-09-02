@@ -1,44 +1,114 @@
-﻿"use client";
+"use client";
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileText, ArrowRight, CheckCircle2, Loader2, Target, MapPin } from 'lucide-react';
-import { submitResumeBuilder, markUploadedResumeReady, submitCareerPreferences, completeOnboarding } from '@/app/actions/onboarding';
-import { extractResumeAction } from '@/app/actions/ai';
+import { Upload, FileText, ArrowRight, CheckCircle2, Loader2, Target, MapPin, AlertTriangle, RotateCcw } from 'lucide-react';
+import {
+  submitResumeBuilder,
+  markUploadedResumeReady,
+  submitCareerPreferences,
+  completeOnboarding,
+  extractOnboardingResume,
+} from '@/app/actions/onboarding';
 
-export default function OnboardingFlow({ initialState }: { initialState: { onboarding_status?: string | null } | null }) {
+const MAX_RESUME_BYTES = 5 * 1024 * 1024;
+const UNEXPECTED = 'Something went wrong on our side. Please try again — nothing you entered was lost.';
+
+type OnboardingPreferences = {
+  career_stage: string;
+  primary_target_role: string;
+  preferred_suburb: string;
+};
+
+type InitialState = {
+  onboarding_status?: string | null;
+  preferences?: OnboardingPreferences;
+} | null;
+
+function readAsBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read the selected file'));
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.readAsDataURL(file);
+  });
+}
+
+export default function OnboardingFlow({ initialState }: { initialState: InitialState }) {
+  const router = useRouter();
   const [step, setStep] = useState(initialState?.onboarding_status || 'resume_required');
   const [loading, setLoading] = useState(false);
-  const [prefs, setPrefs] = useState({ career_stage: '', primary_target_role: '', preferred_suburb: '' });
+  const [prefs, setPrefs] = useState<OnboardingPreferences>({
+    career_stage: initialState?.preferences?.career_stage || '',
+    primary_target_role: initialState?.preferences?.primary_target_role || '',
+    preferred_suburb: initialState?.preferences?.preferred_suburb || '',
+  });
   const [error, setError] = useState('');
   const [builderOpen, setBuilderOpen] = useState(false);
   const [builder, setBuilder] = useState({ name: '', summary: '' });
+  // Set when extraction succeeded but advancing the step did not. Lets the user
+  // retry the cheap half without re-uploading or paying for a second AI call.
+  const [readyResumeId, setReadyResumeId] = useState<string | null>(null);
+
+  const advanceWithResume = async (resumeId: string) => {
+    const result = await markUploadedResumeReady(resumeId);
+    if (result.ok) {
+      setReadyResumeId(null);
+      setStep('career_preferences_required');
+      return;
+    }
+    setReadyResumeId(resumeId);
+    setError(result.message);
+    setStep('resume_required');
+  };
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setError('');
+
+    if (file.size > MAX_RESUME_BYTES) {
+      setError('Choose a file no larger than 5 MB.');
+      event.target.value = '';
+      return;
+    }
+
     setLoading(true);
     setStep('resume_parsing');
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error('Could not read the selected file'));
-        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
-        reader.readAsDataURL(file);
-      });
+      const base64 = await readAsBase64(file);
       const inferredMimeType = file.type || (file.name.toLowerCase().endsWith('.pdf')
         ? 'application/pdf'
         : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      const result = await extractResumeAction({ base64, mimeType: inferredMimeType, filename: file.name });
-      await markUploadedResumeReady(result.resumeId);
-      setStep('career_preferences_required');
+      const extracted = await extractOnboardingResume({ base64, mimeType: inferredMimeType, filename: file.name });
+      if (!extracted.ok) {
+        setError(extracted.message);
+        setStep('resume_required');
+        return;
+      }
+      await advanceWithResume(extracted.resumeId);
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : 'The résumé could not be processed.');
+      console.error('Resume upload failed', uploadError);
+      setError(UNEXPECTED);
       setStep('resume_required');
     } finally {
       setLoading(false);
       event.target.value = '';
+    }
+  };
+
+  const handleRetryAdvance = async () => {
+    if (!readyResumeId) return;
+    setError('');
+    setLoading(true);
+    try {
+      await advanceWithResume(readyResumeId);
+    } catch (retryError) {
+      console.error('Resume step retry failed', retryError);
+      setError(UNEXPECTED);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -50,30 +120,77 @@ export default function OnboardingFlow({ initialState }: { initialState: { onboa
     setError('');
     setLoading(true);
     try {
-      await submitResumeBuilder(builder);
+      const result = await submitResumeBuilder(builder);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
       setStep('career_preferences_required');
     } catch (builderError) {
-      setError(builderError instanceof Error ? builderError.message : 'The résumé could not be saved.');
+      console.error('Resume builder failed', builderError);
+      setError(UNEXPECTED);
     } finally {
       setLoading(false);
     }
   };
 
   const handlePreferencesSubmit = async () => {
+    setError('');
     setLoading(true);
-    await submitCareerPreferences(prefs);
-    setStep('journey_decision_required');
-    setLoading(false);
+    try {
+      const result = await submitCareerPreferences(prefs);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setStep('journey_decision_required');
+    } catch (preferencesError) {
+      console.error('Career preferences failed', preferencesError);
+      setError(UNEXPECTED);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleJourneyDecision = async (decision: string) => {
+    setError('');
     setLoading(true);
-    await completeOnboarding(decision);
+    try {
+      const result = await completeOnboarding(decision);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      router.replace('/app');
+    } catch (journeyError) {
+      console.error('Completing onboarding failed', journeyError);
+      setError(UNEXPECTED);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const errorBanner = error ? (
+    <div role="alert" className="mb-6 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-left">
+      <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-500" />
+      <div className="flex-1">
+        <p className="text-sm font-medium text-red-500">{error}</p>
+        {readyResumeId && (
+          <button
+            onClick={handleRetryAdvance}
+            disabled={loading}
+            className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-primary-teal hover:text-primary-teal-dark disabled:opacity-50"
+          >
+            <RotateCcw size={14} /> Continue without re-uploading
+          </button>
+        )}
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className="flex flex-col md:flex-row h-full min-h-[500px]">
-      
+
       {/* Left branding panel */}
       <div className="w-full md:w-1/3 bg-bg-secondary p-8 border-r border-border-light flex flex-col justify-between hidden md:flex">
         <div>
@@ -96,21 +213,30 @@ export default function OnboardingFlow({ initialState }: { initialState: { onboa
 
       {/* Right Content panel */}
       <div className="flex-1 p-8 flex items-center justify-center relative bg-bg-main">
+        {/* Step counter for mobile, where the panel above is hidden entirely. */}
+        <p className="absolute top-4 left-8 text-xs font-bold uppercase tracking-wider text-text-muted md:hidden">
+          {step === 'career_preferences_required'
+            ? 'Step 2 of 3'
+            : step === 'journey_decision_required'
+              ? 'Step 3 of 3'
+              : 'Step 1 of 3'}
+        </p>
+
         <AnimatePresence mode="wait">
-          
+
           {step === 'resume_required' && (
             <motion.div key="resume" initial={{opacity:0, x:20}} animate={{opacity:1, x:0}} exit={{opacity:0, x:-20}} className="w-full max-w-md">
               <h2 className="text-3xl font-bold text-text-heading mb-3">Let’s start with your résumé</h2>
               <p className="text-text-muted mb-8 text-lg">Your résumé helps JobOS understand your experience, skills and the opportunities that may suit you.</p>
-              {error && <p role="alert" className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm font-medium text-red-500">{error}</p>}
-              
+              {errorBanner}
+
               <div className="space-y-4">
                 <label
-                  className="w-full bg-primary-teal text-bg-main border-2 border-primary-teal hover:bg-primary-teal-dark hover:border-primary-teal-dark rounded-xl p-5 flex items-center justify-between transition-all group"
+                  className={`w-full bg-primary-teal text-bg-main border-2 border-primary-teal rounded-xl p-5 flex items-center justify-between transition-all group ${loading ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-primary-teal-dark hover:border-primary-teal-dark'}`}
                 >
                   <div className="text-left">
                     <h3 className="font-bold text-lg">Upload My Résumé</h3>
-                    <p className="text-sm opacity-80 mt-1 font-medium">JobOS will review it and extract useful info.</p>
+                    <p className="text-sm opacity-80 mt-1 font-medium">PDF or Word document, up to 5 MB.</p>
                   </div>
                   <Upload size={24} className="group-hover:-translate-y-1 transition-transform" />
                   <input type="file" className="sr-only" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleUpload} disabled={loading} />
@@ -136,16 +262,18 @@ export default function OnboardingFlow({ initialState }: { initialState: { onboa
                   </div>
                 )}
 
-                <button 
+                <button
                   onClick={handleBuilderClick}
                   disabled={loading || (builderOpen && (!builder.name.trim() || !builder.summary.trim()))}
-                  className="w-full bg-bg-card border-2 border-border-light hover:border-primary-teal text-text-charcoal rounded-xl p-5 flex items-center justify-between transition-all group"
+                  className="w-full bg-bg-card border-2 border-border-light hover:border-primary-teal text-text-charcoal rounded-xl p-5 flex items-center justify-between transition-all group disabled:opacity-50"
                 >
                   <div className="text-left">
                     <h3 className="font-bold text-lg text-text-heading">{builderOpen ? 'Save My Résumé' : 'Build a Résumé'}</h3>
                     <p className="text-sm text-text-muted mt-1 font-medium">{builderOpen ? 'Use these details as your canonical résumé.' : 'Don’t have one? Add your details manually.'}</p>
                   </div>
-                  <FileText size={24} className="text-text-muted group-hover:text-primary-teal" />
+                  {loading && builderOpen
+                    ? <Loader2 size={24} className="animate-spin text-primary-teal" />
+                    : <FileText size={24} className="text-text-muted group-hover:text-primary-teal" />}
                 </button>
               </div>
             </motion.div>
@@ -156,6 +284,7 @@ export default function OnboardingFlow({ initialState }: { initialState: { onboa
               <Loader2 size={48} className="animate-spin text-primary-teal mx-auto mb-6" />
               <h2 className="text-2xl font-bold text-text-heading mb-2">We’ve received your résumé</h2>
               <p className="text-text-muted">JobOS is securely reviewing it to extract your key skills and experience...</p>
+              <p className="text-xs text-text-muted mt-6">This usually takes a few seconds. Please keep this tab open.</p>
             </motion.div>
           )}
 
@@ -167,12 +296,14 @@ export default function OnboardingFlow({ initialState }: { initialState: { onboa
               </div>
               <h2 className="text-3xl font-bold text-text-heading mb-3">A few short questions</h2>
               <p className="text-text-muted mb-8">So JobOS can personalise your search.</p>
+              {errorBanner}
 
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-bold text-text-muted uppercase tracking-wider mb-2">Which best describes you right now?</label>
-                  <select 
-                    value={prefs.career_stage} 
+                  <label htmlFor="career_stage" className="block text-sm font-bold text-text-muted uppercase tracking-wider mb-2">Which best describes you right now?</label>
+                  <select
+                    id="career_stage"
+                    value={prefs.career_stage}
                     onChange={e => setPrefs({...prefs, career_stage: e.target.value})}
                     className="w-full bg-bg-input border border-border-light rounded-xl p-3 text-sm text-text-charcoal focus:outline-none focus:border-primary-teal focus:ring-1 focus:ring-primary-teal"
                   >
@@ -184,30 +315,34 @@ export default function OnboardingFlow({ initialState }: { initialState: { onboa
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-text-muted uppercase tracking-wider mb-2">What type of role are you looking for?</label>
-                  <input 
-                    type="text" 
+                  <label htmlFor="primary_target_role" className="block text-sm font-bold text-text-muted uppercase tracking-wider mb-2">What type of role are you looking for?</label>
+                  <input
+                    id="primary_target_role"
+                    type="text"
                     value={prefs.primary_target_role}
                     onChange={e => setPrefs({...prefs, primary_target_role: e.target.value})}
+                    maxLength={120}
                     placeholder="e.g. Project Manager"
                     className="w-full bg-bg-input border border-border-light rounded-xl p-3 text-sm text-text-charcoal focus:outline-none focus:border-primary-teal focus:ring-1 focus:ring-primary-teal"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-text-muted uppercase tracking-wider mb-2">Where would you prefer to work?</label>
-                  <input 
-                    type="text" 
+                  <label htmlFor="preferred_suburb" className="block text-sm font-bold text-text-muted uppercase tracking-wider mb-2">Where would you prefer to work?</label>
+                  <input
+                    id="preferred_suburb"
+                    type="text"
                     value={prefs.preferred_suburb}
                     onChange={e => setPrefs({...prefs, preferred_suburb: e.target.value})}
+                    maxLength={120}
                     placeholder="e.g. Sydney CBD (or Remote)"
                     className="w-full bg-bg-input border border-border-light rounded-xl p-3 text-sm text-text-charcoal focus:outline-none focus:border-primary-teal focus:ring-1 focus:ring-primary-teal"
                   />
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={handlePreferencesSubmit}
-                disabled={!prefs.career_stage || !prefs.primary_target_role || loading}
+                disabled={!prefs.career_stage || !prefs.primary_target_role.trim() || loading}
                 className="w-full mt-8 bg-accent-orange text-white py-3 rounded-xl font-bold hover:bg-[#ea580c] transition-all flex items-center justify-center disabled:opacity-50"
               >
                 {loading ? <Loader2 size={20} className="animate-spin" /> : <>Continue <ArrowRight size={18} className="ml-2" /></>}
@@ -219,19 +354,20 @@ export default function OnboardingFlow({ initialState }: { initialState: { onboa
             <motion.div key="journey" initial={{opacity:0, x:20}} animate={{opacity:1, x:0}} exit={{opacity:0, x:-20}} className="w-full max-w-md text-center">
               <h2 className="text-3xl font-bold text-text-heading mb-3">Where do you want your job to take you?</h2>
               <p className="text-text-muted mb-8 text-lg">JobOS can turn your next role, promotion or business ambition into a practical job journey.</p>
-              
+              {errorBanner}
+
               <div className="space-y-4">
-                <button 
+                <button
                   onClick={() => handleJourneyDecision('yes')}
                   disabled={loading}
-                  className="w-full bg-primary-teal text-bg-main border-2 border-primary-teal py-4 rounded-xl font-bold hover:bg-primary-teal-dark hover:border-primary-teal-dark shadow-md transition-all text-lg"
+                  className="w-full bg-primary-teal text-bg-main border-2 border-primary-teal py-4 rounded-xl font-bold hover:bg-primary-teal-dark hover:border-primary-teal-dark shadow-md transition-all text-lg flex items-center justify-center disabled:opacity-50"
                 >
-                  Build My Job Journey
+                  {loading ? <Loader2 size={20} className="animate-spin" /> : 'Build My Job Journey'}
                 </button>
-                <button 
+                <button
                   onClick={() => handleJourneyDecision('no')}
                   disabled={loading}
-                  className="w-full bg-transparent text-text-muted py-3 rounded-xl font-medium hover:bg-bg-hover hover:text-text-charcoal transition-all text-sm"
+                  className="w-full bg-transparent text-text-muted py-3 rounded-xl font-medium hover:bg-bg-hover hover:text-text-charcoal transition-all text-sm disabled:opacity-50"
                 >
                   I’ll do this later
                 </button>
