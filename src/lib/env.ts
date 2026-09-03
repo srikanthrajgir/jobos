@@ -31,6 +31,18 @@ export function getAppUrl(): URL {
   return url;
 }
 
+// Read at runtime through requireValue's dynamic process.env access rather than
+// letting the client bundle inline `process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+// at build time. Next inlines NEXT_PUBLIC_* literals during `next build`, and
+// the Dockerfile builds with no env at all, so an inlined read would bake in
+// `undefined` no matter what Coolify sets at runtime. The server page reads this
+// and passes it down instead. Optional: a missing key degrades to a message
+// rather than throwing, so the rest of the page still works.
+export function getGoogleMapsApiKey(): string | null {
+  const name = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY";
+  return process.env[name]?.trim() || null;
+}
+
 export function getOpenAIConfig() {
   return {
     apiKey: requireValue("OPENAI_API_KEY"),
