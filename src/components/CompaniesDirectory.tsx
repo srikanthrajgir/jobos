@@ -1,23 +1,44 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Building2, ExternalLink, Map as MapIcon, MapPin, Search } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { Building2, ExternalLink, MapPin, Search } from "lucide-react";
+import CompaniesMap, { type MapCompany } from "@/components/CompaniesMap";
 
 export type CompanyDirectoryItem = {
   name: string;
   industry: string;
   location: string;
   website: string | null;
+  lat: number | null;
+  lng: number | null;
   roles: Array<{ id: string; title: string; url: string | null }>;
 };
 
-export default function CompaniesDirectory({ companies }: { companies: CompanyDirectoryItem[] }) {
+export default function CompaniesDirectory({
+  companies,
+  mapsApiKey,
+}: {
+  companies: CompanyDirectoryItem[];
+  mapsApiKey: string | null;
+}) {
   const [query, setQuery] = useState("");
   const [selectedName, setSelectedName] = useState(companies[0]?.name || "");
   const filtered = useMemo(() => companies.filter((company) =>
     `${company.name} ${company.industry} ${company.location}`.toLowerCase().includes(query.trim().toLowerCase()),
   ), [companies, query]);
   const selected = companies.find((company) => company.name === selectedName) || filtered[0];
+
+  // Only the filtered set is plotted, so searching narrows the map too. Anything
+  // without coordinates simply cannot be placed — see the map's own notice.
+  const plotted = useMemo<MapCompany[]>(
+    () => filtered
+      .filter((company): company is CompanyDirectoryItem & { lat: number; lng: number } =>
+        company.lat !== null && company.lng !== null)
+      .map((company) => ({ name: company.name, location: company.location, lat: company.lat, lng: company.lng })),
+    [filtered],
+  );
+
+  const handleMapSelect = useCallback((name: string) => setSelectedName(name), []);
 
   return (
     // h-full against the shell's full-bleed slot, so both panes reach the
@@ -38,7 +59,10 @@ export default function CompaniesDirectory({ companies }: { companies: CompanyDi
               className="w-full rounded-xl border border-border-light bg-bg-input py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary-teal"
             />
           </label>
-          <p className="mt-3 text-xs font-bold uppercase tracking-wider text-text-muted">{filtered.length} employers</p>
+          <p className="mt-3 text-xs font-bold uppercase tracking-wider text-text-muted">
+            {filtered.length} employers
+            {filtered.length > 0 && ` · ${plotted.length} on map`}
+          </p>
         </div>
 
         {/* Scrolls independently of the map. */}
@@ -118,18 +142,14 @@ export default function CompaniesDirectory({ companies }: { companies: CompanyDi
       </aside>
 
       {/* Column 2 — map (remaining ~62%) */}
-      <section className="relative min-h-0 flex-1 bg-bg-secondary">
-        {/* Google Maps mounts here. It fills the pane exactly, so the map
-            controls sit flush with the viewport edges. */}
-        <div id="companies-map" className="flex h-full w-full items-center justify-center">
-          <div className="px-6 text-center">
-            <MapIcon size={44} className="mx-auto mb-3 text-border-hover" />
-            <p className="font-bold text-text-heading">Map view</p>
-            <p className="mt-1 text-sm text-text-muted">
-              {selected ? `Ready to plot ${selected.name} — ${selected.location}` : "Google Maps will render here."}
-            </p>
-          </div>
-        </div>
+      <section id="companies-map" className="relative min-h-0 flex-1 bg-bg-secondary">
+        <CompaniesMap
+          apiKey={mapsApiKey}
+          companies={plotted}
+          selectedName={selected?.name || ""}
+          onSelect={handleMapSelect}
+          plottedOf={filtered.length}
+        />
       </section>
     </div>
   );
