@@ -2,12 +2,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Menu, X, Moon, Sun } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,16 +16,6 @@ const Navbar = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const toggleTheme = () => {
-    if (isDark) {
-      document.documentElement.classList.remove('dark');
-      setIsDark(false);
-    } else {
-      document.documentElement.classList.add('dark');
-      setIsDark(true);
-    }
-  };
 
   return (
     <header 
@@ -48,13 +38,7 @@ const Navbar = () => {
             <Link href="/signup" className="px-4 py-2 bg-primary-teal text-white rounded-md font-bold hover:bg-primary-teal-dark transition-colors">Build My JobOS</Link>
           </nav>
           
-          <button 
-            onClick={toggleTheme} 
-            className="flex items-center justify-center p-2 border border-border-light rounded-full bg-bg-secondary text-text-charcoal hover:border-primary-teal hover:shadow-sm transition-all"
-            aria-label="Toggle theme"
-          >
-            {isDark ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
+          <ThemeToggle className="flex items-center justify-center p-2 border border-border-light rounded-full bg-bg-secondary text-text-charcoal hover:border-primary-teal hover:shadow-sm transition-all" />
 
           <button 
             className="lg:hidden text-text-charcoal focus:outline-none"

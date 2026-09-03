@@ -3,6 +3,7 @@ import "@fontsource/plus-jakarta-sans";
 import "@fontsource/dm-serif-display";
 import "./globals.css";
 import ChatWidget from "@/components/ChatWidget";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme";
 
 const appUrl = new URL(process.env.NEXT_PUBLIC_APP_URL || "https://jobos.com.au");
 
@@ -37,8 +38,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark h-full antialiased" data-theme="dark">
+    // Dark stays the server-rendered default, so the look is unchanged without
+    // JS. suppressHydrationWarning is required because the script below edits
+    // these very attributes before React hydrates.
+    <html lang="en" className="dark h-full antialiased" data-theme="dark" suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans">
+        {/* First thing in the body: applies the stored (or system) theme before
+            the browser paints, so a light-mode visitor never sees a dark flash. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
         {children}
         {/* Mounted in the root layout so it is present on every route — the
             landing page, auth pages, the app shell and admin — and survives
