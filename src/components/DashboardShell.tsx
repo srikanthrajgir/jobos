@@ -14,16 +14,36 @@ import { signOut } from '@/app/actions/auth';
 const SIDEBAR_ITEMS = [
   { icon: LayoutDashboard, label: 'Today', href: '/app' },
   { icon: Search, label: 'Opportunities', href: '/app/opportunities' },
-  { icon: Building2, label: 'Companies', href: '/app/companies' },
+  { icon: Building2, label: 'Employer Map', href: '/app/companies' },
   { icon: KanbanSquare, label: 'Pipeline', href: '/app/pipeline' },
   { icon: FileEdit, label: 'Application Studio', href: '/app/application-studio' },
   { icon: FileText, label: 'Resume', href: '/app/resume' },
 ];
 
+// The top bar otherwise derives its title from the last URL segment, which
+// cannot express a name that differs from the route ("/app/companies" is the
+// Employer Map). These win over the derived label.
+const PAGE_TITLES: Record<string, string> = {
+  '/app': 'Today',
+  '/app/companies': 'Employer Map',
+};
+
+// Subtitles live in the top bar rather than the page body, so a page does not
+// spend vertical space restating what it is.
+const PAGE_SUBTITLES: Record<string, string> = {
+  '/app/companies': 'Explore employers with currently verified opportunities.',
+};
+
+// Routes that own the whole workspace: no padding, no max-width, no footer, and
+// no scroll of their own — the page manages its panes and their scrolling.
+const FULL_BLEED_ROUTES = new Set(['/app/companies']);
+
 export default function DashboardShell({ children, userEmail }: { children: React.ReactNode, userEmail?: string }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const subtitle = PAGE_SUBTITLES[pathname];
+  const isFullBleed = FULL_BLEED_ROUTES.has(pathname);
 
   const handleSignOut = async () => {
     await signOut();
@@ -159,16 +179,21 @@ export default function DashboardShell({ children, userEmail }: { children: Reac
         
         {/* Top Header */}
         <header className="h-16 flex items-center justify-between px-4 md:px-8 border-b border-border-light bg-bg-card/50 backdrop-blur-md shrink-0">
-          <div className="flex items-center">
-            <button 
+          <div className="flex items-center min-w-0">
+            <button
               className="md:hidden p-2 -ml-2 mr-2 text-text-charcoal"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu size={24} />
             </button>
-            <h1 className="text-lg font-bold text-text-heading capitalize">
-              {pathname === '/app' ? 'Today' : pathname.split('/').pop()?.replace('-', ' ')}
-            </h1>
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold text-text-heading capitalize leading-tight">
+                {PAGE_TITLES[pathname] ?? pathname.split('/').pop()?.replace('-', ' ')}
+              </h1>
+              {subtitle && (
+                <p className="hidden truncate text-xs text-text-muted sm:block">{subtitle}</p>
+              )}
+            </div>
           </div>
           
           <div className="flex items-center space-x-2 md:space-x-4">
@@ -191,22 +216,30 @@ export default function DashboardShell({ children, userEmail }: { children: Reac
         </header>
 
         {/* Scrollable Workspace */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth flex flex-col">
-          <div className="max-w-7xl mx-auto w-full flex-1">
+        <main
+          className={isFullBleed
+            // min-h-0 is what lets a pane scroll instead of stretching the
+            // page: a flex child defaults to min-height:auto.
+            ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
+            : 'flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth flex flex-col'}
+        >
+          <div className={isFullBleed ? 'flex-1 min-h-0' : 'max-w-7xl mx-auto w-full flex-1'}>
             {children}
           </div>
           
-          <footer className="max-w-7xl mx-auto w-full mt-12 py-6 border-t border-border-light text-center text-xs text-text-muted flex justify-center space-x-4">
-            <span>© {new Date().getFullYear()} JobOS</span>
-            <span>&middot;</span>
-            <Link href="/privacy" className="hover:text-primary-teal transition-colors">Privacy</Link>
-            <span>&middot;</span>
-            <Link href="/terms" className="hover:text-primary-teal transition-colors">Terms</Link>
-            <span>&middot;</span>
-            <Link href="/disclaimer" className="hover:text-primary-teal transition-colors">Disclaimer</Link>
-            <span>&middot;</span>
-            <Link href="/help" className="hover:text-primary-teal transition-colors">Help</Link>
-          </footer>
+          {!isFullBleed && (
+            <footer className="max-w-7xl mx-auto w-full mt-12 py-6 border-t border-border-light text-center text-xs text-text-muted flex justify-center space-x-4">
+              <span>© {new Date().getFullYear()} JobOS</span>
+              <span>&middot;</span>
+              <Link href="/privacy" className="hover:text-primary-teal transition-colors">Privacy</Link>
+              <span>&middot;</span>
+              <Link href="/terms" className="hover:text-primary-teal transition-colors">Terms</Link>
+              <span>&middot;</span>
+              <Link href="/disclaimer" className="hover:text-primary-teal transition-colors">Disclaimer</Link>
+              <span>&middot;</span>
+              <Link href="/help" className="hover:text-primary-teal transition-colors">Help</Link>
+            </footer>
+          )}
         </main>
         
       </div>
