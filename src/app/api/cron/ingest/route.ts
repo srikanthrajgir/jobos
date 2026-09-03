@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { getCronSecret } from "@/lib/env";
 import { isAuthorizedBearer } from "@/lib/security";
-import { fetchSourceOpportunities, type JobSource } from "@/lib/ingestion";
+import { fetchSourceOpportunities, locationKey, type JobSource } from "@/lib/ingestion";
+import { resolveLocations } from "@/lib/geocode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,12 +24,32 @@ export async function POST(request: Request) {
 
   let sourcesProcessed = 0;
   let opportunitiesUpserted = 0;
+  let geocoded = 0;
   const failures: Array<{ sourceId: string; error: string }> = [];
 
   for (const source of (sources || []) as JobSource[]) {
     try {
       const jobs = await fetchSourceOpportunities(source);
       if (jobs.length) {
+        // Geocode by locality before the upsert, so coordinates are written in
+        // the same statement rather than needing a second pass. Distinct
+        // suburbs are far fewer than postings, which is what keeps this cheap.
+        const keys = new Set<string>();
+        for (const job of jobs) {
+          const key = locationKey(job.suburb, job.state);
+          if (key) keys.add(key);
+        }
+        const coordinates = await resolveLocations(supabase, keys);
+        for (const job of jobs) {
+          const key = locationKey(job.suburb, job.state);
+          const point = key ? coordinates.get(key) : undefined;
+          if (point) {
+            job.latitude = point.latitude;
+            job.longitude = point.longitude;
+          }
+        }
+        geocoded += jobs.filter((job) => job.latitude !== null).length;
+
         const { error: upsertError } = await supabase
           .from("job_opportunities")
           .upsert(jobs, { onConflict: "job_source_id,external_job_id" });
@@ -56,6 +77,7 @@ export async function POST(request: Request) {
     success: failures.length === 0,
     sourcesProcessed,
     opportunitiesUpserted,
+    geocoded,
     failures,
   }, { status: failures.length && sourcesProcessed === 0 ? 502 : 200 });
 }

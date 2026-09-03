@@ -43,6 +43,13 @@ export function getGoogleMapsApiKey(): string | null {
   return process.env[name]?.trim() || null;
 }
 
+// Separate from the browser Maps key: that one is referrer-restricted and a
+// server request sends no referrer, so it would be rejected. Optional — without
+// it, geocoding falls back to whatever the cache already holds.
+export function getGeocodingApiKey(): string | null {
+  return process.env.GOOGLE_GEOCODING_API_KEY?.trim() || null;
+}
+
 export function getOpenAIConfig() {
   return {
     apiKey: requireValue("OPENAI_API_KEY"),
