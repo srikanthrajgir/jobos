@@ -10,6 +10,7 @@ import {
   Menu, X, Bell
 } from 'lucide-react';
 import { signOut } from '@/app/actions/auth';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const SIDEBAR_ITEMS = [
   { icon: LayoutDashboard, label: 'Today', href: '/app' },
@@ -202,6 +203,7 @@ export default function DashboardShell({ children, userEmail }: { children: Reac
                 {userEmail}
               </span>
             )}
+            <ThemeToggle className="p-2 text-text-muted hover:text-text-charcoal rounded-full hover:bg-bg-hover transition-colors" />
             <button className="p-2 text-text-muted hover:text-text-charcoal rounded-full hover:bg-bg-hover transition-colors">
               <Search size={20} />
             </button>
