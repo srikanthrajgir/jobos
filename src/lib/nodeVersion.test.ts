@@ -172,8 +172,18 @@ describe("the lockfile still carries what a Linux container installs", () => {
     // prunes these, and `npm ci` then fails in the image with "Missing:
     // @emnapi/core from lock file". Update the lock inside the container, or
     // hand-edit it, rather than running a bare `npm install` on a dev machine.
-    const emnapi = paths.filter((p) => p.includes("@emnapi/"));
-    expect(emnapi.length, "the @emnapi/* entries have been pruned from the lockfile").toBeGreaterThan(0);
+    //
+    // Counting any "@emnapi/" path was not enough, and let the same deploy
+    // break through a second time: the nested copies under
+    // @tailwindcss/oxide-wasm32-wasi are `inBundle` and survive the prune, so
+    // the count stayed above zero while the three TOP-LEVEL entries — the exact
+    // ones npm ci reports as Missing/Invalid — had gone. Name them instead.
+    for (const needed of ["@emnapi/core", "@emnapi/runtime", "@emnapi/wasi-threads"]) {
+      expect(
+        paths.includes(`node_modules/${needed}`),
+        `node_modules/${needed} has been pruned from the lockfile — \`npm ci\` will fail on Linux with "Missing: ${needed} from lock file". Restore it rather than running a bare \`npm install\`.`
+      ).toBe(true);
+    }
   });
 
   it("carries musl builds, since the image is Alpine", () => {
