@@ -2,6 +2,7 @@
 import "@fontsource/plus-jakarta-sans";
 import "@fontsource/dm-serif-display";
 import "./globals.css";
+import ChatWidget from "@/components/ChatWidget";
 
 const appUrl = new URL(process.env.NEXT_PUBLIC_APP_URL || "https://jobos.com.au");
 
@@ -39,6 +40,10 @@ export default function RootLayout({
     <html lang="en" className="dark h-full antialiased" data-theme="dark">
       <body className="min-h-full flex flex-col font-sans">
         {children}
+        {/* Mounted in the root layout so it is present on every route — the
+            landing page, auth pages, the app shell and admin — and survives
+            client navigation without remounting. */}
+        <ChatWidget />
       </body>
     </html>
   );
